@@ -1,0 +1,29 @@
+# Local build logs and temporary extraction folders
+*.log
+otclient-build*.log
+_otclient-out/
+
+# Docker and local runtime state
+.env
+*.pid
+*.tmp
+*.temp
+
+# Generated OTClient web artifacts; keep source changes in otclient/ instead
+web/public/otclient.data
+web/public/otclient.html
+web/public/otclient.js
+web/public/otclient.wasm
+
+# Heavy extracted client assets kept locally for experiments
+tibia-client-15.00.249ccc/sounds/*.ogg
+
+# Common dependency/build outputs
+node_modules/
+build/
+dist/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+compile_commands.json

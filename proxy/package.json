@@ -1,0 +1,14 @@
+{
+  "name": "tibia-ws-proxy",
+  "version": "1.0.0",
+  "description": "WebSocket <-> TCP bridge for OTClient WASM <-> TFS",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

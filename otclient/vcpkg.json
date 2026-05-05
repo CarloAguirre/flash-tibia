@@ -1,0 +1,52 @@
+{
+  "name": "otclient",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "asio",
+    "abseil",
+    "cpp-httplib",
+    "cppcodec",
+    "discord-rpc",
+    "liblzma",
+    "libobfuscate",
+    "libogg",
+    "libvorbis",
+    "nlohmann-json",
+    "openal-soft",
+    "openssl",
+    "parallel-hashmap",
+    "physfs",
+    "protobuf",
+    "pugixml",
+    "stduuid",
+    "zlib",
+    "bshoshany-thread-pool",
+    "fmt",
+    "utfcpp",
+    "gtest",
+    "freetype",
+    {
+      "name": "inih",
+      "features": [
+        "cpp"
+      ]
+    },
+    {
+      "name": "luajit",
+      "platform": "!android & !wasm32"
+    },
+    {
+      "name": "opengl",
+      "platform": "windows | linux"
+    },
+    {
+      "name": "glew",
+      "platform": "windows | linux | osx"
+    },
+    {
+      "name": "angle",
+      "platform": "windows"
+    }
+  ],
+  "builtin-baseline": "56bb2411609227288b70117ead2c47585ba07713"
+}

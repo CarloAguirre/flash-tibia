@@ -1,0 +1,69 @@
+name: tibia-web
+
+services:
+  db:
+    image: mariadb:11
+    container_name: tibia-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE:      forgottenserver
+      MARIADB_USER:          forgottenserver
+      MARIADB_PASSWORD:      forgottenserver
+    volumes:
+      - tibia-db-data:/var/lib/mysql
+      - ./tfs/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./tfs/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-uroot", "-proot"]
+      interval: 5s
+      timeout:  3s
+      retries:  20
+
+  tfs:
+    image: tfs:8.60
+    build: ./tfs
+    container_name: tfs
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./tfs/config.lua:/srv/config.lua:ro
+      - ./tfs/data:/srv/data:ro
+    # No host port mapping — TFS is reached only through the WS proxy.
+    expose:
+      - "7171"
+      - "7172"
+
+  proxy:
+    image: tibia-proxy
+    build: ./proxy
+    container_name: tibia-proxy
+    restart: unless-stopped
+    depends_on:
+      - tfs
+    environment:
+      TFS_HOST:     tfs
+      TFS_LOGIN:    "7171"
+      TFS_GAME:     "7172"
+      HEALTH_PORT:  "7979"
+    ports:
+      - "7171:7171"
+      - "7172:7172"
+      - "7979:7979"
+
+  web:
+    image: tibia-web
+    build: ./web
+    container_name: tibia-web
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    ports:
+      - "8080:8080"
+
+volumes:
+  tibia-db-data:
