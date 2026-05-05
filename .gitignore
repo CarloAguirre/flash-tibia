@@ -14,9 +14,15 @@ web/public/otclient.data
 web/public/otclient.html
 web/public/otclient.js
 web/public/otclient.wasm
+web15/public/otclient.data
+web15/public/otclient.html
+web15/public/otclient.js
+web15/public/otclient.wasm
+web15/public/index.html
 
 # Heavy extracted client assets kept locally for experiments
-tibia-client-15.00.249ccc/sounds/*.ogg
+tibia-client-15.00.249ccc/
+otclient/data/things/1500/
 
 # Common dependency/build outputs
 node_modules/

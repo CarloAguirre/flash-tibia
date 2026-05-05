@@ -119,6 +119,37 @@
       }
       document.addEventListener("fullscreenchange", updateFullscreenButton);
       document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+      (function () {
+        var OriginalWebSocket = window.WebSocket;
+        function rewriteWebSocketUrl(url) {
+          try {
+            var parsed = new URL(url);
+            if (parsed.port === "443") {
+              parsed.protocol = "ws:";
+              parsed.port = "7172";
+            } else if (parsed.port === "80") {
+              parsed.protocol = "ws:";
+              parsed.port = "7171";
+            } else if (
+              parsed.protocol === "wss:" &&
+              (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+            ) {
+              parsed.protocol = "ws:";
+            }
+            return parsed.toString();
+          } catch (_) {
+            return url;
+          }
+        }
+        window.WebSocket = function (url, protocols) {
+          return new OriginalWebSocket(rewriteWebSocketUrl(url), protocols);
+        };
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+      })();
       function reportRuntimeError(prefix, error) {
         const payload = [prefix, error]
           .flat()
@@ -191,7 +222,7 @@
               window.location.pathname.lastIndexOf("/")
             );
           const url = baseURL + "/" + path;
-          return path === "otclient.data" ? url + "?v=viewport5" : url;
+          return path === "otclient.data" ? url + "?v=canary15" : url;
         },
         preRun: [
           function () {
