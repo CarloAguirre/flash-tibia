@@ -55,6 +55,7 @@ verify_file "$lua_file" "lua"
 
 # Reads the env file
 while IFS='=' read -r key value; do
+  value="${value//$'\r'/}"
   if [[ "$key" != "#"* && "$key" != "" ]]; then
     case $key in
       MYSQL_HOST)

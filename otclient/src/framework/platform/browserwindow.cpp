@@ -35,6 +35,34 @@ BrowserWindow& g_browserWindow = (BrowserWindow&)g_window;
 stdext::map<char, Fw::Key> m_keyMapStr;
 EmscriptenWebGLContextAttributes attr;
 
+namespace {
+double getConfiguredCanvasLogicalScale() {
+    const double scale = EM_ASM_DOUBLE({
+        var value = 1;
+        if (typeof Module !== "undefined" && Module["canvasLogicalScale"] !== undefined) {
+            value = Number(Module["canvasLogicalScale"]);
+        } else if (typeof window !== "undefined" && window["OTCLIENT_CANVAS_LOGICAL_SCALE"] !== undefined) {
+            value = Number(window["OTCLIENT_CANVAS_LOGICAL_SCALE"]);
+        }
+        return isFinite(value) && value > 0 ? value : 1;
+    });
+
+    return scale > 0.0 && scale <= 4.0 ? scale : 1.0;
+}
+
+int scaledCanvasDimension(double value, double scale) {
+    const int scaledValue = int(value * scale + 0.5);
+    return scaledValue > 0 ? scaledValue : 1;
+}
+
+Size getCanvasLogicalSize(double scale) {
+    double cssWidth = 0;
+    double cssHeight = 0;
+    emscripten_get_element_css_size("#canvas", &cssWidth, &cssHeight);
+    return Size(scaledCanvasDimension(cssWidth, scale), scaledCanvasDimension(cssHeight, scale));
+}
+}
+
 BrowserWindow::BrowserWindow() {
     m_minimumSize = Size(600, 480);
     m_size = Size(1280, 720);
@@ -166,10 +194,9 @@ void BrowserWindow::terminate() {
 }
 
 void BrowserWindow::internalInitGL() {
-    double w, h;
-    emscripten_get_element_css_size("#canvas", &w, &h);
-    m_size = Size(int(w), int(h));
-    emscripten_set_canvas_element_size("#canvas", int(w), int(h));
+    m_canvasLogicalScale = getConfiguredCanvasLogicalScale();
+    m_size = getCanvasLogicalSize(m_canvasLogicalScale);
+    emscripten_set_canvas_element_size("#canvas", m_size.width(), m_size.height());
 
 
     EmscriptenWebGLContextAttributes attr;
@@ -180,7 +207,7 @@ void BrowserWindow::internalInitGL() {
     emscripten_webgl_make_context_current(ctx);
 
 
-    glViewport(0, 0, int(w), int(h));
+    glViewport(0, 0, m_size.width(), m_size.height());
 }
 
 void BrowserWindow::poll() {
@@ -322,9 +349,11 @@ extern "C" {
 void BrowserWindow::handleMouseCallback(int eventType, const EmscriptenMouseEvent* mouseEvent) {
     if (!m_usingTouch && mouseEvent->screenX != 0 && mouseEvent->screenY != 0 && mouseEvent->clientX != 0 && mouseEvent->clientY != 0 && mouseEvent->targetX != 0 && mouseEvent->targetY != 0) {
         int button = mouseEvent->button;
-        g_dispatcher.addEvent([this, eventType, button] {
+        Point mousePosition = getMousePosition(mouseEvent->targetX, mouseEvent->targetY);
+        g_dispatcher.addEvent([this, eventType, button, mousePosition] {
             m_inputEvent.reset();
             m_inputEvent.type = (eventType == EMSCRIPTEN_EVENT_MOUSEDOWN) ? Fw::MousePressInputEvent : Fw::MouseReleaseInputEvent;
+            m_inputEvent.mousePos = mousePosition;
             switch (button) {
                 case 0:
                     m_inputEvent.mouseButton = Fw::MouseLeftButton;
@@ -350,10 +379,13 @@ void BrowserWindow::handleMouseCallback(int eventType, const EmscriptenMouseEven
 
 void BrowserWindow::handleMouseWheelCallback(const EmscriptenWheelEvent* event) {
     if (event->mouse.screenX != 0 && event->mouse.screenY != 0 && event->mouse.clientX != 0 && event->mouse.clientY != 0 && event->mouse.targetX != 0 && event->mouse.targetY != 0) {
-        g_dispatcher.addEvent([this, event] {
+        Point mousePosition = getMousePosition(event->mouse.targetX, event->mouse.targetY);
+        double deltaY = event->deltaY;
+        g_dispatcher.addEvent([this, deltaY, mousePosition] {
             m_inputEvent.reset();
             m_inputEvent.type = Fw::MouseReleaseInputEvent;
-            event->deltaY > 0 ? m_inputEvent.wheelDirection = Fw::MouseWheelDown : m_inputEvent.wheelDirection = Fw::MouseWheelUp;
+            m_inputEvent.mousePos = mousePosition;
+            deltaY > 0 ? m_inputEvent.wheelDirection = Fw::MouseWheelDown : m_inputEvent.wheelDirection = Fw::MouseWheelUp;
             m_inputEvent.type = Fw::MouseWheelInputEvent;
             m_inputEvent.mouseButton = Fw::MouseMidButton;
             if (m_inputEvent.type != Fw::NoInputEvent && m_onInputEvent)
@@ -364,12 +396,12 @@ void BrowserWindow::handleMouseWheelCallback(const EmscriptenWheelEvent* event) 
 
 
 void BrowserWindow::handleResizeCallback(const EmscriptenUiEvent* event) {
-    double w, h;
-    emscripten_get_element_css_size("#canvas", &w, &h);
-    if (m_size.width() != int(w) || m_size.height() != int(h)) {
-        emscripten_set_canvas_element_size("#canvas", int(w), int(h));
-        glViewport(0, 0, int(w), int(h));
-        m_size = Size(int(w), int(h));
+    m_canvasLogicalScale = getConfiguredCanvasLogicalScale();
+    const Size canvasSize = getCanvasLogicalSize(m_canvasLogicalScale);
+    if (m_size.width() != canvasSize.width() || m_size.height() != canvasSize.height()) {
+        emscripten_set_canvas_element_size("#canvas", canvasSize.width(), canvasSize.height());
+        glViewport(0, 0, canvasSize.width(), canvasSize.height());
+        m_size = canvasSize;
         m_onResize(m_size);
     }
 }
@@ -377,7 +409,7 @@ void BrowserWindow::handleResizeCallback(const EmscriptenUiEvent* event) {
 void BrowserWindow::handleMouseMotionCallback(const EmscriptenMouseEvent* mouseEvent) {
     m_inputEvent.reset();
     m_inputEvent.type = Fw::MouseMoveInputEvent;
-    Point newMousePos(mouseEvent->clientX / m_displayDensity, mouseEvent->clientY / m_displayDensity);
+    Point newMousePos = getMousePosition(mouseEvent->targetX, mouseEvent->targetY);
     m_inputEvent.mouseMoved = newMousePos - m_inputEvent.mousePos;
     m_inputEvent.mousePos = newMousePos;
     if (m_onInputEvent)
@@ -392,9 +424,10 @@ void BrowserWindow::handleTouchCallback(int eventType, const EmscriptenTouchEven
             m_clickTimer.stop();
             return;
         };
-        g_dispatcher.addEvent([this, eventType, event] {
+        Point mousePosition = getMousePosition(event->touches->targetX, event->touches->targetY);
+        g_dispatcher.addEvent([this, eventType, mousePosition] {
             m_inputEvent.reset();
-            Point newMousePos(event->touches->targetX / m_displayDensity, event->touches->targetY / m_displayDensity);
+            Point newMousePos = mousePosition;
             m_inputEvent.mouseButton = Fw::MouseLeftButton;
             if (eventType == EMSCRIPTEN_EVENT_TOUCHSTART) {
                 m_clickTimer.restart();
@@ -404,7 +437,7 @@ void BrowserWindow::handleTouchCallback(int eventType, const EmscriptenTouchEven
                 m_inputEvent.type = Fw::MouseReleaseInputEvent;
                 g_dispatcher.addEvent([this] { m_mouseButtonStates &= ~(1 << Fw::MouseLeftButton); });
                 if (m_clickTimer.running() && m_clickTimer.ticksElapsed() >= 200) {
-                    processLongTouch(event);
+                    processLongTouch();
                 }
                 m_clickTimer.stop();
             }
@@ -415,9 +448,10 @@ void BrowserWindow::handleTouchCallback(int eventType, const EmscriptenTouchEven
 }
 
 void BrowserWindow::updateTouchPosition(const EmscriptenTouchEvent* event) {
-    g_dispatcher.addEvent([this, event] {
+    Point mousePosition = getMousePosition(event->touches->targetX, event->touches->targetY);
+    g_dispatcher.addEvent([this, mousePosition] {
         m_inputEvent.reset();
-        Point newMousePos(event->touches->targetX / m_displayDensity, event->touches->targetY / m_displayDensity);
+        Point newMousePos = mousePosition;
         m_inputEvent.mouseMoved = newMousePos - m_inputEvent.mousePos;
         m_inputEvent.mousePos = newMousePos;
         m_inputEvent.type = Fw::MouseMoveInputEvent;
@@ -426,16 +460,20 @@ void BrowserWindow::updateTouchPosition(const EmscriptenTouchEvent* event) {
     });
 }
 
-void BrowserWindow::processLongTouch(const EmscriptenTouchEvent* event) {
+Point BrowserWindow::getMousePosition(double x, double y) const {
+    return Point(int((x * m_canvasLogicalScale) / m_displayDensity), int((y * m_canvasLogicalScale) / m_displayDensity));
+}
+
+void BrowserWindow::processLongTouch() {
     m_clickTimer.stop();
-    g_dispatcher.addEvent([this, event] {
+    g_dispatcher.addEvent([this] {
         m_inputEvent.reset();
         m_inputEvent.mouseButton = Fw::MouseRightButton;
         m_inputEvent.type = Fw::MousePressInputEvent;
         if (m_onInputEvent)
             m_onInputEvent(m_inputEvent);
     });
-    g_dispatcher.addEvent([this, event] {
+    g_dispatcher.addEvent([this] {
         m_inputEvent.reset();
         m_inputEvent.mouseButton = Fw::MouseRightButton;
         m_inputEvent.type = Fw::MouseReleaseInputEvent;

@@ -569,6 +569,7 @@ private:
 
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
+	bool suppressInitialLogout = false;
 
 	bool loggedIn = false;
 

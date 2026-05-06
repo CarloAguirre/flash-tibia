@@ -182,3 +182,11 @@ INSERT INTO `players`
 (0   , 'Dawn18'          , 1         , 100          , 2      , 0         , 155     , 155        , 0           , 106       , 95        , 78        , 116       , 128       , 60    , 60       , 1        , ''          , 410  , 0),
 (0   , 'Dawn19'          , 1         , 100          , 2      , 0         , 155     , 155        , 0           , 106       , 95        , 78        , 116       , 128       , 60    , 60       , 1        , ''          , 410  , 0),
 (0   , 'Dawn20'          , 1         , 100          , 2      , 0         , 155     , 155        , 0           , 106       , 95        , 78        , 116       , 128       , 60    , 60       , 1        , ''          , 410  , 0);
+
+INSERT INTO `towns` (`id`, `name`, `posx`, `posy`, `posz`)
+VALUES (8, 'Thais', 32348, 32213, 7)
+ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `posx` = VALUES(`posx`), `posy` = VALUES(`posy`), `posz` = VALUES(`posz`);
+
+UPDATE `players`
+SET `town_id` = 8, `posx` = 32348, `posy` = 32213, `posz` = 7
+WHERE `account_id` BETWEEN 101 AND 115;

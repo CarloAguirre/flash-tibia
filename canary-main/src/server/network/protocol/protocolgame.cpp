@@ -556,6 +556,7 @@ void ProtocolGame::release() {
 }
 
 void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingSystem_t operatingSystem) {
+	suppressInitialLogout = true;
 	// OTCV8 features
 	if (otclientV8 > 0) {
 		sendFeatures();
@@ -692,7 +693,6 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 		player->lastIP = player->getIP();
 		player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
 		player->loginProtectionTime = OTSYS_TIME() + g_configManager().getNumber(LOGIN_PROTECTION_TIME);
-		acceptPackets = true;
 	} else {
 		if (eventConnect != 0 || !g_configManager().getBoolean(REPLACE_KICK_ON_LOGIN)) {
 			// Already trying to connect
@@ -712,8 +712,18 @@ void ProtocolGame::login(const std::string &name, uint32_t accountId, OperatingS
 			connect(foundPlayer->getName(), operatingSystem);
 		}
 	}
-	OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
 	sendBosstiaryCooldownTimer();
+	if (player && getCurrentBuffer()) {
+		auto &initialOutputBuffer = getCurrentBuffer();
+		send(std::move(initialOutputBuffer));
+	}
+	OutputMessagePool::getInstance().addProtocolToAutosend(shared_from_this());
+	if (player) {
+		acceptPackets = true;
+		[[maybe_unused]] auto eventId = g_dispatcher().scheduleEvent(
+			1000, [self = getThis()] { self->suppressInitialLogout = false; }, "ProtocolGame::acceptLeaveGame"
+		);
+	}
 }
 
 void ProtocolGame::connect(const std::string &playerName, OperatingSystem_t operatingSystem) {
@@ -751,10 +761,17 @@ void ProtocolGame::connect(const std::string &playerName, OperatingSystem_t oper
 	}
 	player->resetIdleTime();
 	acceptPackets = true;
+	[[maybe_unused]] auto eventId = g_dispatcher().scheduleEvent(
+		1000, [self = getThis()] { self->suppressInitialLogout = false; }, "ProtocolGame::acceptLeaveGame"
+	);
 }
 
 void ProtocolGame::logout(bool displayEffect, bool forced) {
 	if (!player) {
+		return;
+	}
+
+	if (suppressInitialLogout && !acceptPackets) {
 		return;
 	}
 
@@ -1099,6 +1116,10 @@ void ProtocolGame::parsePacketFromDispatcher(NetworkMessage &msg, uint8_t recvby
 
 	switch (recvbyte) {
 		case 0x14:
+			if (suppressInitialLogout) {
+				suppressInitialLogout = false;
+				return;
+			}
 			logout(true, false);
 			break;
 		case 0x1D:

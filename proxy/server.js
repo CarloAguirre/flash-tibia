@@ -11,6 +11,8 @@
 //   TFS_LOGIN    login port    (default 7171)
 //   TFS_GAME     game port     (default 7172)
 //   HEALTH_PORT  health http   (default 7979)
+//   STRIP_SOCKET_PRELUDE  drop an initial ASCII host prelude (default false)
+//   DEBUG_FRAMES  log first frame bytes for diagnostics (default false)
 
 import net  from 'node:net';
 import http from 'node:http';
@@ -20,6 +22,13 @@ const TFS_HOST    =        process.env.TFS_HOST    ?? '127.0.0.1';
 const TFS_LOGIN   = Number(process.env.TFS_LOGIN   ?? 7171);
 const TFS_GAME    = Number(process.env.TFS_GAME    ?? 7172);
 const HEALTH_PORT = Number(process.env.HEALTH_PORT ?? 7979);
+const STRIP_SOCKET_PRELUDE = process.env.STRIP_SOCKET_PRELUDE === 'true';
+const DEBUG_FRAMES = process.env.DEBUG_FRAMES === 'true';
+
+function isEmscriptenSocketPrelude(buf) {
+    if (!buf.length || buf[buf.length - 1] !== 0x0a) return false;
+    return buf.every(byte => byte === 0x0a || byte === 0x0d || (byte >= 0x20 && byte <= 0x7e));
+}
 
 function startBridge(label, listenPort, upstreamPort) {
     const server = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
@@ -33,11 +42,31 @@ function startBridge(label, listenPort, upstreamPort) {
             console.log(`[>] tcp up  ${TFS_HOST}:${upstreamPort} (${id})`);
         });
 
+        let firstClientFrame = true;
+        let clientFrameCount = 0;
+        let serverFrameCount = 0;
+
         ws.on('message', data => {
             const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+            clientFrameCount += 1;
+            if (DEBUG_FRAMES && clientFrameCount <= 4) {
+                console.log(`[d] ws->tcp ${id} #${clientFrameCount} len=${buf.length} hex=${buf.subarray(0, 48).toString('hex')}`);
+            }
+            if (STRIP_SOCKET_PRELUDE && firstClientFrame) {
+                firstClientFrame = false;
+                if (isEmscriptenSocketPrelude(buf)) {
+                    console.log(`[~] ws prelude ${id}: ${buf.toString('utf8').trim()}`);
+                    return;
+                }
+            }
+            firstClientFrame = false;
             if (!tcp.destroyed) tcp.write(buf);
         });
         tcp.on('data', chunk => {
+            serverFrameCount += 1;
+            if (DEBUG_FRAMES && serverFrameCount <= 4) {
+                console.log(`[d] tcp->ws ${id} #${serverFrameCount} len=${chunk.length} hex=${chunk.subarray(0, 48).toString('hex')}`);
+            }
             if (ws.readyState === ws.OPEN) ws.send(chunk, { binary: true });
         });
 

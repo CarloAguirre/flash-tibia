@@ -54,16 +54,21 @@ RUN --mount=type=cache,target=/opt/vcpkg/downloads \
 
 FROM dependencies AS build
 WORKDIR /srv/build
+ARG SOURCE_CACHEBUST=0
 COPY src ./src
 COPY cmake ./cmake
+COPY tests ./tests
 COPY recompile.sh CMakeLists.txt CMakePresets.json vcpkg.json ./
 COPY --from=dependencies /opt/vcpkg_installed ./vcpkg_installed
 
-RUN export VCPKG_MANIFEST_INSTALL=OFF \
-    && export VCPKG_INSTALLED_DIR=/srv/build/vcpkg_installed \
-    && ./recompile.sh "/opt"
+RUN export VCPKG_ROOT=/opt/vcpkg/ \
+    && cmake --preset linux-release \
+    -DTOGGLE_BIN_FOLDER=ON \
+    -DVCPKG_MANIFEST_INSTALL=OFF \
+    -DVCPKG_INSTALLED_DIR=/srv/build/vcpkg_installed \
+    && cmake --build --preset linux-release
 
 FROM ubuntu:24.04 AS prod
 COPY --from=build /srv/build/build/linux-release/bin/canary /bin/canary
 WORKDIR /srv/canary
-ENTRYPOINT ["/srv/canary/start.sh", "canary"]
+ENTRYPOINT ["/srv/canary/start.sh", "/bin/canary"]

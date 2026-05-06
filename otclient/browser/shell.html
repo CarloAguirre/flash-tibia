@@ -124,12 +124,13 @@
         function rewriteWebSocketUrl(url) {
           try {
             var parsed = new URL(url);
-            if (parsed.port === "443") {
+            var port = parsed.port || (parsed.protocol === "wss:" ? "443" : parsed.protocol === "ws:" ? "80" : "");
+            if (port === "443") {
               parsed.protocol = "ws:";
-              parsed.port = "7172";
-            } else if (parsed.port === "80") {
+              parsed.port = "7272";
+            } else if (port === "80") {
               parsed.protocol = "ws:";
-              parsed.port = "7171";
+              parsed.port = "7271";
             } else if (
               parsed.protocol === "wss:" &&
               (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
@@ -222,18 +223,27 @@
               window.location.pathname.lastIndexOf("/")
             );
           const url = baseURL + "/" + path;
-          return path === "otclient.data" ? url + "?v=canary15" : url;
+            return path === "otclient.data" ? url + "?v=canary15-spawn-cachefix" : url;
         },
         preRun: [
           function () {
             addRunDependency("syncfs");
-            if (!FS.analyzePath("/user").exists) FS.mkdir("/user");
-            FS.mount(IDBFS, { autoPersist: true }, "/user");
-            FS.syncfs(true, function (err) {
+            let syncDone = false;
+            function finishSync(err) {
+              if (syncDone) return;
+              syncDone = true;
               if (err) {
                 Module.print(err);
               }
               removeRunDependency("syncfs");
+            }
+            setTimeout(function () {
+              finishSync("IDBFS sync timeout");
+            }, 3000);
+            if (!FS.analyzePath("/user").exists) FS.mkdir("/user");
+            FS.mount(IDBFS, { autoPersist: true }, "/user");
+            FS.syncfs(true, function (err) {
+              finishSync(err);
             });
           },
         ],

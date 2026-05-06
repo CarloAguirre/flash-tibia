@@ -3,8 +3,9 @@
 
 -- updater
 Services = {
+    enableStartupStatus = false,
     --updater = "http://localhost/api/updater.php", --./updater
-    status = "http://localhost/canary-login/login.php", --./client_entergame | ./client_topmenu
+    --status = "http://localhost/canary-login/login.php",
     --websites = "http://localhost/?subtopic=accountmanagement", --./client_entergame "Forgot password and/or email"
     --createAccount = "http://localhost/clientcreateaccount.php", --./client_entergame -- createAccount.lua
     --getCoinsUrl = "http://localhost/?subtopic=shop&step=terms", --./game_market
@@ -64,7 +65,9 @@ if ENABLE_SERVERS then
             port = 8081,
             protocol = 1500,
             httpLogin = true,
-            useAuthenticator = false
+            useAuthenticator = false,
+            account = "@test1",
+            password = "test"
         }
     }
 end

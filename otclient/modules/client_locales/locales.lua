@@ -72,6 +72,9 @@ function init()
     installLocales('/locales')
 
     local userLocaleName = g_settings.get('locale', 'false')
+    if userLocaleName == 'false' and g_platform.getOSName() == 'browser' then
+        userLocaleName = defaultLocaleName
+    end
     if userLocaleName ~= 'false' and setLocale(userLocaleName) then
         pdebug('Using configured locale: ' .. userLocaleName)
     else

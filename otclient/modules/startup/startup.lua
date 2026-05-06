@@ -3,6 +3,11 @@ function init()
         onExit = exit
     })
 
+    if g_platform.getOSName() == 'browser' then
+        g_window.setTitle(g_app.getName())
+        return
+    end
+
     if g_platform.isMobile() then
         g_window.setMinimumSize({ width = 640, height = 360 })
     else
@@ -46,6 +51,10 @@ function terminate()
     disconnect(g_app, {
         onExit = exit
     })
+
+    if g_platform.getOSName() == 'browser' then
+        return
+    end
 
     -- save window configs
     g_settings.set('window-size', g_window.getUnmaximizedSize())

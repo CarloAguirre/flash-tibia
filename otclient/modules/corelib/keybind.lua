@@ -62,6 +62,29 @@ function Keybind.init()
     Keybind.presetToIndex[preset] = index
   end
 
+  if g_platform.getOSName() == 'browser' then
+    local function createMemoryConfig()
+      local nodes = {}
+
+      return {
+        getNode = function(_, key) return nodes[key] end,
+        setNode = function(_, key, node) nodes[key] = node end,
+        remove = function(_, key) nodes[key] = nil end,
+        clear = function() nodes = {} end,
+        save = function() end,
+        getFileName = function() return '' end
+      }
+    end
+
+    for _, preset in ipairs(Keybind.presets) do
+      Keybind.configs.keybinds[preset] = createMemoryConfig()
+      Keybind.configs.hotkeys[preset] = createMemoryConfig()
+      Keybind.hotkeys[CHAT_MODE.ON][preset] = {}
+      Keybind.hotkeys[CHAT_MODE.OFF][preset] = {}
+    end
+    return
+  end
+
   if not g_resources.directoryExists("/controls") then
     g_resources.makeDir("/controls")
   end
@@ -104,6 +127,10 @@ end
 
 function Keybind.terminate()
   disconnect(g_game, { onGameStart = Keybind.online, onGameEnd = Keybind.offline })
+
+  if g_platform.getOSName() == 'browser' then
+    return
+  end
 
   for _, preset in ipairs(Keybind.presets) do
     Keybind.configs.keybinds[preset]:save()

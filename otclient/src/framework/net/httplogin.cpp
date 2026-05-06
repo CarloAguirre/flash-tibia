@@ -195,26 +195,40 @@ void LoginHttp::httpLogin(const std::string& host, const std::string& path,
         attr.requestData = bodyStr.data();
         attr.requestDataSize = bodyStr.length();
 
-        std::string url = "https://" + (host.length() > 0 ? host : "127.0.0.1") + ":" + std::to_string(port) + path;
-        emscripten_fetch_t* fetch = emscripten_fetch(&attr, url.c_str());
+        const std::string serverHost = host.length() > 0 ? host : "127.0.0.1";
+        const auto buildUrl = [&](const std::string& scheme) {
+            return scheme + "://" + serverHost + ":" + std::to_string(port) + path;
+        };
+        const auto fetchUrl = [&](const std::string& url) {
+            return emscripten_fetch(&attr, url.c_str());
+        };
 
-        if (fetch->status != 200 && httpLogin) {
-            std::string url = "http://" + (host.length() > 0 ? host : "127.0.0.1") + ":" + std::to_string(port) + path;
-            fetch = emscripten_fetch(&attr, url.c_str());
+        std::string url = buildUrl(httpLogin ? "http" : "https");
+        emscripten_fetch_t* fetch = fetchUrl(url);
+
+        if ((!fetch || fetch->status != 200) && httpLogin) {
+            if (fetch) {
+                emscripten_fetch_close(fetch);
+            }
+            url = buildUrl("https");
+            fetch = fetchUrl(url);
         }
 
         if (cancelled.load()) {
             emscripten_fetch_close(fetch);
             return;
         }
-        if (fetch && fetch->status == 200 &&
+        int status = fetch ? fetch->status : -1;
+        if (fetch && status == 200 &&
                !parseJsonResponse(std::string(fetch->data, fetch->numBytes))) {
-            fetch->status = -1;
+            status = -1;
         }
 
-        emscripten_fetch_close(fetch);
+        if (fetch) {
+            emscripten_fetch_close(fetch);
+        }
         if (cancelled.load()) return;
-        if (fetch && fetch->status == 200) {
+        if (status == 200) {
             g_dispatcher.addEvent([this, request_id] {
                 if (cancelled.load()) return;
                 g_lua.callGlobalField("EnterGame", "loginSuccess", request_id,
@@ -222,13 +236,7 @@ void LoginHttp::httpLogin(const std::string& host, const std::string& path,
                 this->getCharacterList());
             });
         } else {
-            int status = 0;
             std::string msg = "";
-            if (fetch) {
-                status = fetch->status;
-            } else {
-                status = -1;
-            }
             if (this->errorMessage.length() == 0) {
                 msg = "Unknown error";
             } else {

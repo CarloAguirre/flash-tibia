@@ -334,7 +334,7 @@ function EnterGame.firstShow()
         end)
     end
 
-    if Services and Services.status then
+    if Services and Services.status and Services.enableStartupStatus ~= false then
         if g_modules.getModule("client_bottommenu"):isLoaded()  then
             EnterGame.postCacheInfo()
             EnterGame.postEventScheduler()
@@ -891,6 +891,17 @@ function EnterGame.setUniqueServer(host, port, protocol, windowWidth, windowHeig
     httpLoginBox:setVisible(false)
     httpLoginBox:setHeight(0)
 
+    local server = Servers_init[host]
+    if server then
+        if server.account then
+            enterGame:getChildById('accountNameTextEdit'):setText(server.account)
+            enterGame:getChildById('accountNameTextEdit'):setCursorPos(-1)
+        end
+        if server.password then
+            enterGame:getChildById('accountPasswordTextEdit'):setText(server.password)
+        end
+    end
+
     local serverListButton = enterGame:getChildById('serverListButton')
     serverListButton:setVisible(false)
     serverListButton:setHeight(0)
@@ -909,7 +920,6 @@ function EnterGame.setUniqueServer(host, port, protocol, windowWidth, windowHeig
 
     enterGame:setHeight(windowHeight)
     enterGame.disableToken = true
-    local server = Servers_init[host]
     enterGame.disableToken = not (server and server.useAuthenticator)
 
     -- preload the assets

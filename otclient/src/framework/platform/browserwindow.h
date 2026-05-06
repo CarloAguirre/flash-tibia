@@ -70,7 +70,8 @@ public:
     void handleFocusCallback(int eventType, const EmscriptenFocusEvent* event);
     void handleTouchCallback(int eventType, const EmscriptenTouchEvent* event);
     void updateTouchPosition(const EmscriptenTouchEvent* event);
-    void processLongTouch(const EmscriptenTouchEvent* event);
+    void processLongTouch();
+    Point getMousePosition(double x, double y) const;
 
     Size getDisplaySize() override;
     std::string getClipboardText() override;
@@ -82,6 +83,7 @@ private:
     bool m_running;
     Timer m_clickTimer;
     bool m_usingTouch = false;
+    double m_canvasLogicalScale = 1.0;
     std::vector<std::pair<char const*, Fw::Key>> web_keymap;
     std::string m_clipboardText;
     std::vector<std::string> m_cursors;

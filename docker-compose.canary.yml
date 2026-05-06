@@ -104,5 +104,24 @@ services:
     ports:
       - "${CANARY_WEB_PORT:-8081}:8081"
 
+  myaac15:
+    image: myaac15
+    build: ./myaac-15.xx
+    container_name: myaac15
+    restart: unless-stopped
+    depends_on:
+      canary-db:
+        condition: service_healthy
+      canary:
+        condition: service_started
+      canary-login:
+        condition: service_started
+    volumes:
+      - ./myaac-15.xx:/var/www/html
+      - ./web15/public:/var/www/html/game:ro
+      - ./canary-main:/srv/canary:ro
+    ports:
+      - "${MYAAC15_PORT:-8082}:80"
+
 volumes:
   canary-db-data:

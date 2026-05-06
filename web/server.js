@@ -10,6 +10,7 @@ const ROOT = path.resolve(process.env.WEB_ROOT ?? path.join(__dirname, 'public')
 const LOGIN_PROXY_PREFIX = process.env.LOGIN_PROXY_PREFIX ?? '';
 const LOGIN_PROXY_HOST = process.env.LOGIN_PROXY_HOST ?? '';
 const LOGIN_PROXY_PORT = Number(process.env.LOGIN_PROXY_PORT ?? 80);
+const LOGIN_PROXY_CORS_ORIGIN = process.env.LOGIN_PROXY_CORS_ORIGIN ?? '*';
 
 const MIME = {
     '.html': 'text/html; charset=utf-8',
@@ -31,7 +32,24 @@ const MIME = {
     '.otbm': 'application/octet-stream',
 };
 
+function loginProxyCorsHeaders(req) {
+    return {
+        'Access-Control-Allow-Origin': LOGIN_PROXY_CORS_ORIGIN,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] || 'content-type',
+        'Access-Control-Max-Age': '86400',
+        'Access-Control-Allow-Private-Network': 'true',
+        'Vary': 'Origin, Access-Control-Request-Headers',
+    };
+}
+
 function proxyLogin(req, res, urlPath, rawQuery) {
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204, loginProxyCorsHeaders(req));
+        res.end();
+        return;
+    }
+
     const prefix = LOGIN_PROXY_PREFIX.replace(/\/$/, '');
     let proxyPath = urlPath.slice(prefix.length) || '/';
     if (!proxyPath.startsWith('/')) proxyPath = `/${proxyPath}`;
@@ -44,7 +62,7 @@ function proxyLogin(req, res, urlPath, rawQuery) {
         path: proxyPath + rawQuery,
         headers,
     }, proxyRes => {
-        res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+        res.writeHead(proxyRes.statusCode ?? 502, { ...proxyRes.headers, ...loginProxyCorsHeaders(req) });
         proxyRes.pipe(res);
     });
 
