@@ -41,15 +41,37 @@ local function tryLoadDatWithFallbacks(datPath)
     return false
 end
 
+local function getThingAssetPaths(version, suffix)
+    suffix = suffix or ''
+    return {
+        resolvepath(string.format('/data/things/%d/%s', version, suffix)),
+        resolvepath(string.format('/things/%d/%s', version, suffix))
+    }
+end
+
+local function tryLoadFromPaths(paths, loader)
+    for _, path in ipairs(paths) do
+        if loader(path) then
+            return true
+        end
+    end
+
+    return false
+end
+
 local function load(version)
     local errorList = {}
 
     if version >= 1281 and not g_game.getFeature(GameLoadSprInsteadProtobuf) then
-        local filePath = resolvepath(string.format('/things/%d/', version))
-        if not g_things.loadAppearances(filePath) then
+        local protobufPaths = getThingAssetPaths(version)
+        if not tryLoadFromPaths(protobufPaths, function(filePath)
+            return g_things.loadAppearances(filePath)
+        end) then
             errorList[#errorList + 1] = "Couldn't load assets"
         end
-        if not g_things.loadStaticData(filePath) then
+        if not tryLoadFromPaths(protobufPaths, function(filePath)
+            return g_things.loadStaticData(filePath)
+        end) then
             errorList[#errorList + 1] = "Couldn't load staticdata"
         end
     else
@@ -72,10 +94,12 @@ local function load(version)
             errorList[#errorList + 1] = tr('Unable to load spr file, please place a valid spr in \'%s.spr\'', sprPath)
         end
         if g_game.getFeature(GameLoadSprInsteadProtobuf) and version >= 1281 then
-            local staticPath = resolvepath(string.format('/things/%d/appearances', version))
-            if not g_things.loadAppearances(staticPath) then
+            local staticPaths = getThingAssetPaths(version, 'appearances')
+            if not tryLoadFromPaths(staticPaths, function(staticPath)
+                return g_things.loadAppearances(staticPath)
+            end) then
                 g_logger.warning(string.format(
-                    "[game_things.load()] Couldn't load /things/%d/appearances.dat, possible packets error.", version))
+                    "[game_things.load()] Couldn't load appearances.dat for version %d, possible packets error.", version))
             end
         end
     end

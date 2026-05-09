@@ -205,6 +205,10 @@ local function setup()
             setOption(k, value, true)
         elseif type(v) == 'number' then
             local value = g_settings.getNumber(k)
+            if k == 'shadowFloorIntensity' and not g_settings.getBoolean('shadowFloorIntensityDefault100Applied') then
+                value = v
+                g_settings.set('shadowFloorIntensityDefault100Applied', true)
+            end
             setOption(k, value, true)
         elseif type(v) == 'string' then
             local value = g_settings.getString(k)

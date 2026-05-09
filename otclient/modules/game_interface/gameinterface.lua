@@ -20,7 +20,7 @@ logoutWindow = nil
 exitWindow = nil
 bottomSplitter = nil
 limitedZoom = false
-currentViewMode = 0
+currentViewMode = -1
 classicMapTileSize = 0
 leftIncreaseSidePanels = nil
 leftDecreaseSidePanels = nil
@@ -43,6 +43,16 @@ local mobileConfig = {
     mobileHeightJoystick = 0,
     mobileHeightShortcuts = 0
 }
+
+local function ensureStartupSidePanels()
+    if g_platform.isMobile() or not modules.client_options then
+        return
+    end
+
+    modules.client_options.setOption('showLeftPanel', true)
+    modules.client_options.setOption('showLeftExtraPanel', true)
+    modules.client_options.setOption('showRightExtraPanel', true)
+end
 
 function init()
     g_ui.importStyle('styles/countwindow')
@@ -297,7 +307,7 @@ function show()
         setupViewMode(1)
         setupViewMode(2)
     else
-        -- Default to fullscreen transparent view (mode 2) on desktop/web
+        ensureStartupSidePanels()
         setupViewMode(2)
     end
 
@@ -470,6 +480,7 @@ function updateStretchShrink()
         -- Set gameMapPanel size to height = 11 * 32 + 2
         bottomSplitter:setMarginBottom(bottomSplitter:getMarginBottom() + (gameMapPanel:getHeight() - 32 * 11) - 10)
     end
+
     -- Update action bar layout when window geometry changes
     if modules.game_actionbar and modules.game_actionbar.updateVisibleWidgetsExternal then
         addEvent(function()
@@ -1819,13 +1830,13 @@ function setupViewMode(mode)
         gameRightPanel:setImageColor('alpha')
         gameRightExtraPanel:setImageColor('alpha')
         gameLeftExtraPanel:setImageColor('alpha')
-        gameLeftPanel:setOn(false)
-        gameLeftPanel:setVisible(false)
+        gameLeftPanel:setOn(modules.client_options.getOption('showLeftPanel'))
+        gameLeftPanel:setVisible(modules.client_options.getOption('showLeftPanel'))
         gameRightPanel:setOn(true)
-        gameRightExtraPanel:setOn(false)
-        gameRightExtraPanel:setVisible(false)
-        gameLeftExtraPanel:setOn(false)
-        gameLeftExtraPanel:setVisible(false)
+        gameRightExtraPanel:setOn(modules.client_options.getOption('showRightExtraPanel'))
+        gameRightExtraPanel:setVisible(modules.client_options.getOption('showRightExtraPanel'))
+        gameLeftExtraPanel:setOn(modules.client_options.getOption('showLeftExtraPanel'))
+        gameLeftExtraPanel:setVisible(modules.client_options.getOption('showLeftExtraPanel'))
         gameMapPanel:setOn(true)
         gameBottomPanel:setImageColor('#ffffff88')
         if g_platform.isMobile() then

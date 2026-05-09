@@ -8,7 +8,8 @@ Services = {
     --status = "http://localhost/canary-login/login.php",
     --websites = "http://localhost/?subtopic=accountmanagement", --./client_entergame "Forgot password and/or email"
     --createAccount = "http://localhost/clientcreateaccount.php", --./client_entergame -- createAccount.lua
-    --getCoinsUrl = "http://localhost/?subtopic=shop&step=terms", --./game_market
+    getCoinsUrl = "/index.php/points", --./game_market
+    discordInviteUrl = "https://discord.gg/stUb44Cw"
 }
 
 --- Enables or disables the entire server configuration block.
@@ -72,7 +73,7 @@ if ENABLE_SERVERS then
     }
 end
 
-g_app.setName("OTClient - Redemption");
+g_app.setName("OTClient");
 g_app.setCompactName("otclient");
 g_app.setOrganizationName("otcr");
 

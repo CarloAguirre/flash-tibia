@@ -14,6 +14,7 @@ local fpsLabel
 local pingLabel
 local topLeftYoutubeLink
 local topLeftDiscordLink
+local defaultDiscordUrl = Services and Services.discordInviteUrl or ""
 local url_discord = ""
 local url_youtube = ""
 local lastSyncValue = -1
@@ -32,6 +33,19 @@ local zoomOutButton = nil
 local zoomLevel = 2
 
 local managerAccountsButton = nil
+
+local function bindDiscordLink()
+    if not topLeftDiscordLink then
+        return
+    end
+
+    topLeftDiscordLink.onClick = function()
+        if url_discord and url_discord ~= '' then
+            g_platform.openUrl(url_discord)
+        end
+    end
+end
+
 -- private functions
 local function addButton(id, description, icon, callback, panel, toggle, front)
     local class
@@ -112,6 +126,8 @@ function init()
 
     topLeftYoutubeLink = topMenu:recursiveGetChildById('youtubeIcon')
     topLeftDiscordLink = topMenu:recursiveGetChildById('discordIcon')
+        url_discord = defaultDiscordUrl
+        bindDiscordLink()
 
     Keybind.new("UI", "Toggle Top Menu", "Ctrl+Shift+T", "")
     Keybind.bind("UI", "Toggle Top Menu", {
@@ -371,14 +387,12 @@ function setLinkYoutube(value)
 end
 
 function setLinkDiscord(value)
-
-    url_discord = value
-    topLeftDiscordLink.onClick = function()
-        if url_discord then
-            g_platform.openUrl(url_discord)
-        end
+    if defaultDiscordUrl ~= '' then
+        url_discord = defaultDiscordUrl
+    else
+        url_discord = value or ''
     end
-
+    bindDiscordLink()
 end
 
 function addLeftButton(id, description, icon, callback, front)

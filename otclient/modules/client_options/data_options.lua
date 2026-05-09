@@ -404,7 +404,7 @@ return {
         end
     },
     shadowFloorIntensity              = {
-        value = 30,
+        value = 100,
         action = function(value, options, controller, panels, extraWidgets)
             panels.graphicsEffectsPanel:recursiveGetChildById('shadowFloorIntensity'):setText(string.format(
                 'Shadow floor Intensity: %s%%', value))
@@ -521,7 +521,7 @@ return {
         end
     },
     showLeftExtraPanel                = {
-        value = false,
+        value = true,
         action = function(value, options, controller, panels, extraWidgets)
             modules.game_interface.getLeftExtraPanel():setOn(value)
             -- Update action bars when left extra panel visibility changes
@@ -545,7 +545,7 @@ return {
         end
     },
     showRightExtraPanel               = {
-        value = false,
+        value = true,
         action = function(value, options, controller, panels, extraWidgets)
             modules.game_interface.getRightExtraPanel():setOn(value)
             -- Update action bars when right extra panel visibility changes

@@ -337,9 +337,7 @@ function EnterGame.firstShow()
     if Services and Services.status and Services.enableStartupStatus ~= false then
         if g_modules.getModule("client_bottommenu"):isLoaded()  then
             EnterGame.postCacheInfo()
-            EnterGame.postEventScheduler()
             -- EnterGame.postShowOff() -- myacc/znote no send login.php
-            EnterGame.postShowCreatureBoost()
         end
     end
 end
@@ -528,6 +526,59 @@ function EnterGame.postShowCreatureBoost()
     HTTP.post(Services.status, json.encode({
         type = requestType
     }), onRecvInfo, false)
+end
+
+local function getPanelAuthEndpoint()
+    if not g_platform.isBrowser() then
+        return nil
+    end
+
+    if Services and type(Services.panelAuth) == 'string' and Services.panelAuth ~= '' then
+        return Services.panelAuth
+    end
+
+    return '/login.php'
+end
+
+function EnterGame.syncPanelLogin()
+    local requestType = 'paneltoken'
+    local panelAuthEndpoint = getPanelAuthEndpoint()
+
+    if not panelAuthEndpoint then
+        return
+    end
+
+    if not G.account or G.account == '' or not G.password or G.password == '' then
+        return
+    end
+
+    HTTP.postJSON(panelAuthEndpoint, {
+        type = requestType,
+        email = G.account,
+        password = G.password,
+        token = G.authenticatorToken,
+        stayloggedin = G.stayLogged
+    }, function(response, err)
+        if err then
+            reportRequestWarning(requestType, 'Bad Request. Game_entergame syncPanelLogin')
+            return
+        end
+
+        if type(response) ~= 'table' then
+            reportRequestWarning(requestType, 'Invalid response format')
+            return
+        end
+
+        if response.errorMessage then
+            reportRequestWarning(requestType, response.errorMessage, response.errorCode)
+            return
+        end
+
+        if type(response.panel_url) == 'string' and response.panel_url ~= '' then
+            local separator = response.panel_url:find('?', 1, true) and '&' or '?'
+            g_platform.openUrl(response.panel_url .. separator .. 'panel_sync=1')
+        end
+    end)
 end
 
 function EnterGame.show()
@@ -755,6 +806,7 @@ function EnterGame.loginSuccess(requestId, jsonSession, jsonWorlds, jsonCharacte
 
     -- set session key
     G.sessionKey = session.sessionkey
+    EnterGame.syncPanelLogin()
 
     onCharacterList(nil, characters, account)
 end

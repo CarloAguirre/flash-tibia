@@ -112,22 +112,42 @@ function mapController:onGameStart()
         onPositionChange = onPositionChange
     }):execute()
 
-    -- Load Map
-    g_minimap.clean()
-
-    local minimapFile = '/minimap'
+    -- Load a persisted minimap snapshot when one exists. If there is no saved
+    -- file yet, keep the tiles already learned during the login map description.
     local loadFnc = nil
+    local minimapFiles = {}
 
     if otmm then
-        minimapFile = minimapFile .. '.otmm'
         loadFnc = g_minimap.loadOtmm
+        local clientVersion = g_game.getClientVersion()
+        minimapFiles = {
+            '/data/minimap.otmm',
+            '/minimap' .. clientVersion .. '.otmm',
+            '/minimap.otmm'
+        }
     else
-        minimapFile = minimapFile .. '_' .. g_game.getClientVersion() .. '.otcm'
         loadFnc = g_map.loadOtcm
+        minimapFiles = {
+            '/minimap_' .. g_game.getClientVersion() .. '.otcm'
+        }
     end
 
-    if g_resources.fileExists(minimapFile) then
-        loadFnc(minimapFile)
+    local shouldClear = false
+    for _, minimapFile in ipairs(minimapFiles) do
+        if g_resources.fileExists(minimapFile) then
+            shouldClear = true
+            break
+        end
+    end
+
+    if shouldClear then
+        g_minimap.clean()
+
+        for _, minimapFile in ipairs(minimapFiles) do
+            if g_resources.fileExists(minimapFile) and loadFnc(minimapFile) then
+                break
+            end
+        end
     end
 
     self.ui.minimapBorder.minimap:load()

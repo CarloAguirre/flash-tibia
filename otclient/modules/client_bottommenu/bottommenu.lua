@@ -19,6 +19,11 @@ local monsterOutfit
 local monsterImage
 local bossOutfit
 local bossImage
+local startupWidgetsEnabled = false
+
+function isEnabled()
+    return startupWidgetsEnabled
+end
 
 local default_info = {
     -- hint 1
@@ -33,6 +38,10 @@ local default_info = {
 }
 
 function init()
+    if not startupWidgetsEnabled then
+        return
+    end
+
     g_ui.importStyle('calendar')
     bottomMenu = g_ui.displayUI('bottommenu')
 
@@ -86,20 +95,35 @@ function init()
 end
 
 function terminate()
-    bottomMenu:destroy()
-    calendarWindow:destroy()
+    if bottomMenu then
+        bottomMenu:destroy()
+        bottomMenu = nil
+    end
+
+    if calendarWindow then
+        calendarWindow:destroy()
+        calendarWindow = nil
+    end
 end
 
 function hide()
+    if not bottomMenu then
+        return
+    end
+
     bottomMenu:hide()
     bottomMenu:lower()
 
-    if not calendarWindow:isHidden() then
+    if calendarWindow and not calendarWindow:isHidden() then
         onClickCloseCalendar()
     end
 end
 
 function show()
+    if not bottomMenu then
+        return
+    end
+
     bottomMenu:show()
     bottomMenu:raise()
     bottomMenu:focus()
@@ -107,6 +131,10 @@ end
 
 -- @ Store showoff
 function setShowOffData(data)
+    if not showOffWindow then
+        return
+    end
+
     local widget = g_ui.createWidget('ShowOffWidget', showOffWindow)
     local image = widget:recursiveGetChildById('image')
 
@@ -130,7 +158,7 @@ end
 
 -- @ Calendar/Events scheduler
 function onClickOnCalendar()
-    if eventSchedulerYears == nil or #eventSchedulerYears == 0 then
+    if not calendarWindow or eventSchedulerYears == nil or #eventSchedulerYears == 0 then
         return
     end
 
@@ -145,6 +173,10 @@ function onClickOnCalendar()
 end
 
 function onClickCloseCalendar()
+    if not calendarWindow then
+        return
+    end
+
     calendarWindow:hide()
     calendarWindow:lower()
 
@@ -152,6 +184,10 @@ function onClickCloseCalendar()
 end
 
 function setEventsSchedulerTimestamp(time)
+    if not calendarCurrentDate then
+        return
+    end
+
     eventSchedulerTimestamp = time
     calendarCurrentDate:setText(os.date("%Y-%m-%d, %H:%M CET", eventSchedulerTimestamp))
 end
@@ -334,6 +370,10 @@ function reloadEventsSchedulerCalender()
 end
 
 function setEventsSchedulerCalender(calender)
+    if not activeScheduleEvent or not upcomingScheduleEvent then
+        return
+    end
+
     eventSchedulerCalendar = calender
     reloadEventsSchedulerCalender()
 end
@@ -534,7 +574,7 @@ local function applyToBoostedSlot(raceId, outfitWidget, imageWidget, fileName)
 end
 
 function setBoostedCreatureAndBoss(data)
-    if not modules.game_things.isLoaded() then
+    if not modules.game_things.isLoaded() or not monsterOutfit or not bossOutfit or not monsterImage or not bossImage then
         return
     end
 

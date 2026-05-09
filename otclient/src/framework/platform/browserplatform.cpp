@@ -95,6 +95,30 @@ ticks_t Platform::getFileModificationTime(std::string file)
 
 bool Platform::openUrl(std::string url, bool now)
 {
+    MAIN_THREAD_EM_ASM({
+        const rawUrl = UTF8ToString($0);
+        const openNow = $1 === 1;
+        let handled = false;
+
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'myaac-shell-open-url',
+                    url: rawUrl,
+                    now: openNow
+                }, window.location.origin);
+                handled = true;
+            }
+        } catch (error) {}
+
+        if (!handled) {
+            if (openNow) {
+                window.location.assign(rawUrl);
+            } else {
+                window.open(rawUrl, '_blank', 'noopener');
+            }
+        }
+    }, url.c_str(), now ? 1 : 0);
     return true;
 }
 

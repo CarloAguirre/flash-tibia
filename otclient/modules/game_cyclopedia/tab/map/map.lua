@@ -23,13 +23,16 @@ end
 function Cyclopedia.loadMap()
     local clientVersion = g_game.getClientVersion()
     local minimapWidget = UI.MapBase.minimap
-
-    g_minimap.clean()
-
     local loaded = false
     local minimapFile = "/minimap.otmm"
     local dataMinimapFile = "/data" .. minimapFile
     local versionedMinimapFile = "/minimap" .. clientVersion .. ".otmm"
+
+    if g_resources.fileExists(dataMinimapFile)
+        or g_resources.fileExists(versionedMinimapFile)
+        or g_resources.fileExists(minimapFile) then
+        g_minimap.clean()
+    end
 
     if g_resources.fileExists(dataMinimapFile) then
         loaded = g_minimap.loadOtmm(dataMinimapFile)

@@ -26,17 +26,71 @@
 #include <regex>
 #endif
 
+#ifdef __EMSCRIPTEN__
+#include <cstdlib>
+#include <emscripten/emscripten.h>
+#endif
+
+namespace {
+#ifdef __EMSCRIPTEN__
+std::string getBrowserOrigin()
+{
+    const auto* originPtr = reinterpret_cast<char*>(MAIN_THREAD_EM_ASM_PTR({
+        if (typeof window === 'undefined' || !window.location) {
+            return 0;
+        }
+
+        const origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+        const length = lengthBytesUTF8(origin) + 1;
+        const buffer = _malloc(length);
+        stringToUTF8(origin, buffer, length);
+        return buffer;
+    }));
+
+    if (!originPtr || originPtr[0] == '\0') {
+        if (originPtr) {
+            std::free(const_cast<char*>(originPtr));
+        }
+        return {};
+    }
+
+    std::string origin(originPtr);
+    std::free(const_cast<char*>(originPtr));
+    return origin;
+}
+
+std::string absolutizeBrowserUrl(const std::string& url)
+{
+    if (url.empty() || url.front() != '/') {
+        return url;
+    }
+
+    const auto origin = getBrowserOrigin();
+    if (origin.empty()) {
+        return url;
+    }
+
+    return origin + url;
+}
+#endif
+}
+
 ParsedURI parseURI(const std::string& url) {
     // Regular expression pattern to match URL components
     static const std::regex PARSE_URL{
         R"((([httpsw]{2,5})://)?([^/ :]+)(:(\d+))?(/(.+)?))",
         std::regex_constants::ECMAScript | std::regex_constants::icase };
 
+    std::string normalizedUrl = url;
+#ifdef __EMSCRIPTEN__
+    normalizedUrl = absolutizeBrowserUrl(normalizedUrl);
+#endif
+
     ParsedURI result;
     std::smatch match;
 
     // Check if the URL matches the pattern and has the correct number of components
-    if (std::regex_match(url, match, PARSE_URL) && match.size() == 8) {
+    if (std::regex_match(normalizedUrl, match, PARSE_URL) && match.size() == 8) {
         // Set protocol with default value "http" if not provided
         result.protocol = (match[2].str().empty()) ? "http" : match[2].str();
 

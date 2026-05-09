@@ -191,7 +191,6 @@ StoreWindow
     text-offset: -10 0
     !text: tr('Get')
     font: cipsoftFont
-    @onClick: modules.game_store.getCoinsWebsite()
 
     $pressed:
       text-offset: -18 0

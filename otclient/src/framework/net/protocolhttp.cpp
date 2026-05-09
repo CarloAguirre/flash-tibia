@@ -25,6 +25,33 @@
 #include "framework/core/eventdispatcher.h"
 #include "framework/util/crypt.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/fetch.h>
+#endif
+
+namespace {
+#ifdef __EMSCRIPTEN__
+std::string buildBrowserFetchUrl(const std::string& url)
+{
+    const ParsedURI parsed = parseURI(url);
+    if (parsed.domain.empty()) {
+        return url;
+    }
+
+    const auto protocol = parsed.protocol.empty() ? std::string("http") : parsed.protocol;
+    const bool isDefaultPort = (protocol == "https" && parsed.port == "443") || (protocol == "http" && parsed.port == "80");
+
+    std::string absoluteUrl = protocol + "://" + parsed.domain;
+    if (!parsed.port.empty() && !isDefaultPort) {
+        absoluteUrl += ":" + parsed.port;
+    }
+
+    absoluteUrl += parsed.query.empty() ? "/" : parsed.query;
+    return absoluteUrl;
+}
+#endif
+}
+
 Http g_http;
 
 void Http::init()
@@ -95,6 +122,72 @@ int Http::post(const std::string& url, const std::string& data, int timeout, boo
     }
 
     int operationId = m_operationId++;
+#ifdef __EMSCRIPTEN__
+    asio::post(m_ios, [&, url, data, isJson, operationId] {
+        auto result = std::make_shared<HttpResult>();
+        result->url = url;
+        result->operationId = operationId;
+        result->postData = data;
+        m_operations[operationId] = result;
+
+        emscripten_fetch_attr_t attr;
+        emscripten_fetch_attr_init(&attr);
+        strcpy(attr.requestMethod, "POST");
+
+        static const char* const jsonHeaders[] = {
+            "Content-Type", "application/json; charset=utf-8",
+            0,
+        };
+        static const char* const textHeaders[] = {
+            "Content-Type", "text/plain; charset=utf-8",
+            0,
+        };
+
+        attr.requestHeaders = isJson ? jsonHeaders : textHeaders;
+        attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_SYNCHRONOUS;
+        attr.requestData = data.c_str();
+        attr.requestDataSize = data.size();
+
+        const auto requestUrl = buildBrowserFetchUrl(url);
+        emscripten_fetch_t* fetch = emscripten_fetch(&attr, requestUrl.c_str());
+
+        if (fetch && fetch->status >= 200 && fetch->status < 300) {
+            result->status = fetch->status;
+            result->size = fetch->numBytes;
+            result->progress = 100;
+            if (fetch->data && fetch->numBytes > 0) {
+                result->response.assign(fetch->data, fetch->numBytes);
+            }
+        } else {
+            if (fetch) {
+                result->status = fetch->status;
+                if (fetch->data && fetch->numBytes > 0) {
+                    result->response.assign(fetch->data, fetch->numBytes);
+                }
+            }
+
+            if (!result->response.empty()) {
+                result->error = result->response;
+            } else if (fetch && fetch->status > 0) {
+                result->error = "HTTP " + std::to_string(fetch->status);
+            } else {
+                result->error = "Failed to send HTTP request";
+            }
+        }
+
+        result->finished = true;
+
+        if (fetch) {
+            emscripten_fetch_close(fetch);
+        }
+
+        g_dispatcher.addEvent([this, result, operationId] {
+            g_lua.callGlobalField("g_http", "onPost", result->operationId, result->url, result->error, result->response);
+            m_operations.erase(operationId);
+        });
+    });
+    return operationId;
+#else
     asio::post(m_ios, [&, url, data, timeout, isJson, checkContentLength, operationId] {
         auto result = std::make_shared<HttpResult>();
         result->url = url;
@@ -119,6 +212,7 @@ int Http::post(const std::string& url, const std::string& data, int timeout, boo
         session->start();
     });
     return operationId;
+#endif
 }
 
 int Http::download(const std::string& url, const std::string& path, int timeout)

@@ -27,7 +27,7 @@ local currentIndex = 1
 GameStore = {}
 -- == Enums ==--
 GameStore.website = {
-    WEBSITE_GETCOINS = "https://github.com/mehah/otclient",
+    WEBSITE_GETCOINS = "/index.php/points",
     --IMAGES_URL =  "http://localhost/images/store/" --./game_store --https://docs.opentibiabr.com/opentibiabr/downloads/website-applications/applications#store-for-client-13-1
 }
 
@@ -118,10 +118,13 @@ local function getPageLabelHistory()
 end
 
 local function setImagenHttp(widget, url, isIcon)
-    if GameStore.website.IMAGES_URL then
-        HTTP.downloadImage(GameStore.website.IMAGES_URL .. url, function(path, err)
+    local imageUrl = type(url) == "string" and url:gsub("^/", "") or ""
+    local imageBaseUrl = type(GameStore.website.IMAGES_URL) == "string" and GameStore.website.IMAGES_URL or nil
+    if imageBaseUrl and imageBaseUrl ~= "" then
+        imageBaseUrl = imageBaseUrl:gsub("/*$", "") .. "/"
+        HTTP.downloadImage(imageBaseUrl .. imageUrl, function(path, err)
             if err then
-                g_logger.warning("HTTP error: " .. err .. " - " .. GameStore.website.IMAGES_URL .. url)
+                g_logger.warning("HTTP error: " .. err .. " - " .. imageBaseUrl .. imageUrl)
                 if isIcon then
                     widget:setIcon("/game_store/images/dynamic-image-error")
                 else
@@ -137,14 +140,73 @@ local function setImagenHttp(widget, url, isIcon)
             end
         end)
     else
-        if not g_resources.fileExists("/game_store/images/" .. url) then
-            widget:setImageSource("/game_store/images/dynamic-image-error")
-            widget:setImageFixedRatio(false)
+        local localPath = "/game_store/images/" .. imageUrl
+        if not g_resources.fileExists(localPath) then
+            if isIcon then
+                widget:setIcon("/game_store/images/dynamic-image-error")
+            else
+                widget:setImageSource("/game_store/images/dynamic-image-error")
+                widget:setImageFixedRatio(false)
+            end
         else
-            widget:setImageSource("/game_store/images/" .. url)
+            if isIcon then
+                widget:setIcon(localPath)
+            else
+                widget:setImageSource(localPath)
+            end
         end
 
     end
+end
+
+local storeDescriptionTokens = {
+    ["{activated}"] = "- activates immediately after purchase",
+    ["{backtoinbox}"] = "- can be moved back to your Store Inbox",
+    ["{box}"] = "- delivered in a store box",
+    ["{boxicon}"] = "- delivered in a store box",
+    ["{character}"] = "- only usable by the purchasing character",
+    ["{house}"] = "- placeable in your house",
+    ["{speedboost}"] = "- grants a speed boost",
+    ["{storeinbox}"] = "- delivered to your Store Inbox",
+    ["{use}"] = "- can be used after unwrapping",
+    ["{usablebyall}"] = "- usable by all characters with access to the house"
+}
+
+local function normalizeStoreDescription(description)
+    if type(description) ~= "string" or description == "" then
+        return ""
+    end
+
+    local normalized = description:gsub("\r\n", "\n")
+    normalized = normalized:gsub("<i>", "")
+    normalized = normalized:gsub("</i>", "")
+    normalized = normalized:gsub("&#8226;", "-")
+    normalized = normalized:gsub("&bull;", "-")
+    normalized = normalized:gsub("&nbsp;", " ")
+    normalized = normalized:gsub("&quot;", '"')
+    normalized = normalized:gsub("&#39;", "'")
+    normalized = normalized:gsub("&amp;", "&")
+    normalized = normalized:gsub("&lt;", "<")
+    normalized = normalized:gsub("&gt;", ">")
+    normalized = normalized:gsub("{limit|([^}]+)}", "- purchase limit: %1")
+    normalized = normalized:gsub("{info}%s*", "- ")
+    normalized = normalized:gsub("{storeinboxicon}%s*", "- ")
+    normalized = normalized:gsub("{usablebyallicon}%s*", "- ")
+    normalized = normalized:gsub("{useicon}%s*", "- ")
+    normalized = normalized:gsub("{transferableprice}%s*", "- transferable coin pricing applies\n")
+
+    for token, replacement in pairs(storeDescriptionTokens) do
+        normalized = normalized:gsub(token, replacement)
+    end
+
+    normalized = normalized:gsub("{[^}]+}", "")
+    normalized = normalized:gsub("[ \t]+\n", "\n")
+    normalized = normalized:gsub("\n[ \t]+", "\n")
+    normalized = normalized:gsub("\n\n\n+", "\n\n")
+    normalized = normalized:gsub("%- +\n", "")
+    normalized = normalized:match("^%s*(.-)%s*$") or ""
+
+    return normalized
 end
 
 local function formatNumberWithCommas(value)
@@ -396,6 +458,7 @@ function controllerShop:onInit()
     end
 
     controllerShop.ui.transferPoints.onClick = transferPoints
+    controllerShop.ui.btnCoins.onClick = getCoinsWebsite
     controllerShop.ui.panelItem.listProduct.onChildFocusChange = chooseOffert
     controllerShop.ui.HomePanel.HomeRecentlyAdded.HomeProductos.onChildFocusChange = chooseHome
     -- /*=============================================
@@ -436,8 +499,10 @@ end
 -- =============================================*/
 
 function onStoreInit(url, coinsPacketSize)
-    if not GameStore.website.IMAGES_URL then
+    if type(url) == "string" and url ~= "" then
         GameStore.website.IMAGES_URL = url
+    else
+        GameStore.website.IMAGES_URL = nil
     end
 end
 
@@ -838,8 +903,10 @@ function getUI()
 end
 
 function getCoinsWebsite()
-    if GameStore.website.WEBSITE_GETCOINS ~= "" then
-        g_platform.openUrl(GameStore.website.WEBSITE_GETCOINS)
+    local coinsUrl = "/index.php/points"
+
+    if coinsUrl ~= "" then
+        g_platform.openUrl(coinsUrl)
     else
         sendMessageBox("Error", "No data for store URL.")
     end
@@ -888,6 +955,7 @@ function chooseOffert(self, focusedChild)
         description = descriptionInfo.description
     end
 
+    description = normalizeStoreDescription(description)
     panel:getChildById('lblDescription'):setText(description)
 
     local data = getProductData(product)
