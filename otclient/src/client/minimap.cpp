@@ -30,8 +30,156 @@
 #include "framework/graphics/image.h"
 #include "framework/graphics/texture.h"
 
+#include "lzma.h"
+
 Minimap g_minimap;
 static MinimapTile nulltile;
+
+namespace {
+constexpr int CLIENT_MINIMAP_COORD_SCALE = 32;
+constexpr int CLIENT_MINIMAP_SIZE = 512;
+constexpr size_t CLIENT_MINIMAP_BMP_SIZE = 122 + (CLIENT_MINIMAP_SIZE * CLIENT_MINIMAP_SIZE * 4);
+
+uint16_t readU16(const uint8_t* data)
+{
+    return static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8);
+}
+
+uint32_t readU32(const uint8_t* data)
+{
+    return static_cast<uint32_t>(data[0]) |
+           (static_cast<uint32_t>(data[1]) << 8) |
+           (static_cast<uint32_t>(data[2]) << 16) |
+           (static_cast<uint32_t>(data[3]) << 24);
+}
+
+uint64_t readU64(const uint8_t* data)
+{
+    uint64_t value = 0;
+    for (uint_fast8_t i = 0; i < 8; ++i)
+        value |= static_cast<uint64_t>(data[i]) << (i * 8);
+    return value;
+}
+
+int32_t readS32(const uint8_t* data)
+{
+    return static_cast<int32_t>(readU32(data));
+}
+
+bool parseNumber(const std::string_view text, int& value)
+{
+    value = 0;
+    for (const char c : text) {
+        if (c < '0' || c > '9')
+            return false;
+        value = (value * 10) + (c - '0');
+    }
+    return true;
+}
+
+bool parseClientMinimapFileName(const std::string& fileName, Position& topLeft)
+{
+    static constexpr std::string_view prefix = "minimap-32-";
+    static constexpr std::string_view suffix = ".bmp.lzma";
+
+    const std::string_view name(fileName);
+    if (!name.starts_with(prefix) || !name.ends_with(suffix))
+        return false;
+
+    constexpr size_t xOffset = prefix.size();
+    constexpr size_t yOffset = xOffset + 5;
+    constexpr size_t zOffset = yOffset + 5;
+    if (name.size() < zOffset + 3 || name[xOffset + 4] != '-' || name[yOffset + 4] != '-' || name[zOffset + 2] != '-')
+        return false;
+
+    int x = 0;
+    int y = 0;
+    int z = 0;
+    if (!parseNumber(name.substr(xOffset, 4), x) || !parseNumber(name.substr(yOffset, 4), y) || !parseNumber(name.substr(zOffset, 2), z))
+        return false;
+
+    if (z > g_gameConfig.getMapMaxZ())
+        return false;
+
+    topLeft = Position(x * CLIENT_MINIMAP_COORD_SCALE, y * CLIENT_MINIMAP_COORD_SCALE, static_cast<uint8_t>(z));
+    return true;
+}
+
+size_t findClientMinimapLzmaPropertiesOffset(const std::vector<uint8_t>& data)
+{
+    constexpr uint8_t maxLzmaProperties = (4 * 5 + 4) * 9 + 8;
+    constexpr size_t lzmaHeaderSize = 13;
+
+    for (size_t offset = 0; offset + lzmaHeaderSize <= data.size(); ++offset) {
+        const uint8_t properties = data[offset];
+        if (properties > maxLzmaProperties)
+            continue;
+
+        const uint32_t dictionarySize = readU32(data.data() + offset + 1);
+        if (dictionarySize == 0)
+            continue;
+
+        const uint64_t declaredPayloadSize = readU64(data.data() + offset + 5);
+        const uint64_t remainingPayloadSize = data.size() - (offset + lzmaHeaderSize);
+        if (declaredPayloadSize == remainingPayloadSize)
+            return offset;
+    }
+
+    throw Exception("invalid minimap LZMA header");
+}
+
+std::vector<uint8_t> loadTibiaLzmaBmp(const std::string& fileName)
+{
+    const FileStreamPtr fin = g_resources.openFile(fileName);
+    if (!fin)
+        throw Exception("unable to open file");
+
+    fin->cache(true);
+
+    const auto& compressed = fin->m_data;
+    const size_t propertiesOffset = findClientMinimapLzmaPropertiesOffset(compressed);
+    const uint8_t lclppb = compressed[propertiesOffset];
+
+    lzma_options_lzma options{};
+    options.lc = lclppb % 9;
+
+    const int remainder = lclppb / 9;
+    options.lp = remainder % 5;
+    options.pb = remainder / 5;
+
+    options.dict_size = readU32(compressed.data() + propertiesOffset + 1);
+
+    constexpr size_t lzmaHeaderSize = 13;
+    const size_t payloadOffset = propertiesOffset + lzmaHeaderSize;
+    const size_t payloadSize = static_cast<size_t>(readU64(compressed.data() + propertiesOffset + 5));
+
+    lzma_stream stream = LZMA_STREAM_INIT;
+    const lzma_filter filters[2] = {
+        lzma_filter{ LZMA_FILTER_LZMA1, &options },
+        lzma_filter{ LZMA_VLI_UNKNOWN, nullptr }
+    };
+
+    const lzma_ret initResult = lzma_raw_decoder(&stream, filters);
+    if (initResult != LZMA_OK)
+        throw Exception("failed to initialize minimap LZMA decoder: {}", initResult);
+
+    std::vector<uint8_t> decompressed(CLIENT_MINIMAP_BMP_SIZE);
+    stream.next_in = compressed.data() + payloadOffset;
+    stream.avail_in = payloadSize;
+    stream.next_out = decompressed.data();
+    stream.avail_out = decompressed.size();
+
+    const lzma_ret result = lzma_code(&stream, LZMA_FINISH);
+    const size_t bytesWritten = stream.total_out;
+    lzma_end(&stream);
+
+    if (result != LZMA_STREAM_END)
+        throw Exception("minimap LZMA decompression failed: {}", result);
+
+    decompressed.resize(bytesWritten);
+    return decompressed;
+}
+}
 
 void MinimapBlock::clean()
 {
@@ -299,6 +447,98 @@ bool Minimap::loadImage(const std::string& fileName, const Position& topLeft, fl
         return true;
     } catch (const stdext::exception& e) {
         g_logger.error("failed to load OTMM minimap: {}", e.what());
+        return false;
+    }
+}
+
+bool Minimap::loadClientMinimap(const std::string& directory)
+{
+    uint32_t loadedImages = 0;
+    const auto& files = g_resources.listDirectoryFiles(directory, true);
+    for (const auto& filePath : files) {
+        Position topLeft;
+        if (!parseClientMinimapFileName(g_resources.getFileName(filePath), topLeft))
+            continue;
+
+        if (loadClientMinimapImage(filePath, topLeft))
+            ++loadedImages;
+    }
+
+    if (loadedImages == 0)
+        return false;
+
+    g_logger.info("Loaded {} client minimap image chunks from '{}'", loadedImages, directory);
+    return true;
+}
+
+bool Minimap::loadClientMinimapImage(const std::string& fileName, const Position& topLeft)
+{
+    try {
+        const std::vector<uint8_t> imageData = loadTibiaLzmaBmp(fileName);
+        if (imageData.size() < 122 || imageData[0] != 'B' || imageData[1] != 'M')
+            throw Exception("invalid minimap BMP header");
+
+        const uint32_t dataOffset = readU32(imageData.data() + 10);
+        const int32_t width = readS32(imageData.data() + 18);
+        const int32_t signedHeight = readS32(imageData.data() + 22);
+        const uint16_t bpp = readU16(imageData.data() + 28);
+
+        if (width <= 0 || signedHeight == 0 || bpp != 32)
+            throw Exception("unsupported minimap BMP format");
+        if (topLeft.x % MMBLOCK_SIZE != 0 || topLeft.y % MMBLOCK_SIZE != 0)
+            throw Exception("unsupported minimap BMP alignment");
+
+        const int32_t height = signedHeight < 0 ? -signedHeight : signedHeight;
+        const bool bottomUp = signedHeight > 0;
+        const size_t pixelBytes = static_cast<size_t>(width) * height * 4;
+        if (dataOffset + pixelBytes > imageData.size())
+            throw Exception("minimap BMP pixel data out of bounds");
+
+        const uint8_t* pixels = imageData.data() + dataOffset;
+
+        for (int32_t blockY = 0; blockY < height; blockY += MMBLOCK_SIZE) {
+            for (int32_t blockX = 0; blockX < width; blockX += MMBLOCK_SIZE) {
+                const Position blockPos(topLeft.x + blockX, topLeft.y + blockY, topLeft.z);
+                MinimapBlock& block = getBlock(blockPos);
+                bool blockChanged = false;
+
+                const int32_t maxY = std::min<int32_t>(MMBLOCK_SIZE, height - blockY);
+                const int32_t maxX = std::min<int32_t>(MMBLOCK_SIZE, width - blockX);
+                for (int32_t y = 0; y < maxY; ++y) {
+                    const int32_t imageY = blockY + y;
+                    const int32_t sourceY = bottomUp ? (height - 1 - imageY) : imageY;
+                    for (int32_t x = 0; x < maxX; ++x) {
+                        const int32_t imageX = blockX + x;
+                        const uint8_t* pixel = pixels + ((static_cast<size_t>(sourceY) * width + imageX) * 4);
+                        const uint8_t b = pixel[0];
+                        const uint8_t g = pixel[1];
+                        const uint8_t r = pixel[2];
+                        const uint8_t a = pixel[3];
+                        if (a == 0)
+                            continue;
+
+                        const uint8_t color = Color::to8bit(Color(r, g, b, a));
+                        if (color == UINT8_MAX)
+                            continue;
+
+                        MinimapTile& tile = block.getTile(x, y);
+                        const MinimapTile newTile{ MinimapTileWasSeen, color, 10 };
+                        if (tile != newTile) {
+                            tile = newTile;
+                            blockChanged = true;
+                        }
+                    }
+                }
+
+                if (blockChanged)
+                    block.mustUpdate();
+                block.justSaw();
+            }
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        g_logger.warning("Failed to load client minimap image '{}': {}", fileName, e.what());
         return false;
     }
 }

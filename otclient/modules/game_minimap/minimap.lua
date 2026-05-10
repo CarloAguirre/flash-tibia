@@ -112,14 +112,16 @@ function mapController:onGameStart()
         onPositionChange = onPositionChange
     }):execute()
 
-    -- Load a persisted minimap snapshot when one exists. If there is no saved
-    -- file yet, keep the tiles already learned during the login map description.
+    -- Prefer the official client automap data so the minimap starts revealed.
+    -- Saved snapshots remain only as a fallback when no client minimap pack exists.
     local loadFnc = nil
     local minimapFiles = {}
+    local clientVersion = g_game.getClientVersion()
+    local clientMinimapDirectory = '/data/things/' .. clientVersion
+    local loaded = false
 
     if otmm then
         loadFnc = g_minimap.loadOtmm
-        local clientVersion = g_game.getClientVersion()
         minimapFiles = {
             '/data/minimap.otmm',
             '/minimap' .. clientVersion .. '.otmm',
@@ -128,24 +130,30 @@ function mapController:onGameStart()
     else
         loadFnc = g_map.loadOtcm
         minimapFiles = {
-            '/minimap_' .. g_game.getClientVersion() .. '.otcm'
+            '/minimap_' .. clientVersion .. '.otcm'
         }
     end
 
-    local shouldClear = false
-    for _, minimapFile in ipairs(minimapFiles) do
-        if g_resources.fileExists(minimapFile) then
-            shouldClear = true
-            break
-        end
+    if otmm and g_resources.directoryExists(clientMinimapDirectory) then
+        loaded = g_minimap.loadClientMinimap(clientMinimapDirectory)
     end
 
-    if shouldClear then
-        g_minimap.clean()
-
+    if not loaded then
+        local shouldClear = false
         for _, minimapFile in ipairs(minimapFiles) do
-            if g_resources.fileExists(minimapFile) and loadFnc(minimapFile) then
+            if g_resources.fileExists(minimapFile) then
+                shouldClear = true
                 break
+            end
+        end
+
+        if shouldClear then
+            g_minimap.clean()
+
+            for _, minimapFile in ipairs(minimapFiles) do
+                if g_resources.fileExists(minimapFile) and loadFnc(minimapFile) then
+                    break
+                end
             end
         end
     end

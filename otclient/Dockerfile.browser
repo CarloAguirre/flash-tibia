@@ -40,7 +40,7 @@ RUN git clone --filter=blob:none --single-branch --depth 1 https://github.com/em
  && /opt/emsdk/emsdk activate latest
 
 ENV VCPKG_ROOT=/opt/vcpkg
-COPY vcpkg.json /tmp/vcpkg.json
+COPY otclient/vcpkg.json /tmp/vcpkg.json
 RUN git clone --filter=blob:none https://github.com/microsoft/vcpkg.git ${VCPKG_ROOT} \
  && cd ${VCPKG_ROOT} \
  && git checkout "$(grep 'builtin-baseline' /tmp/vcpkg.json | cut -d'"' -f4)" \
@@ -51,19 +51,19 @@ WORKDIR /workspace
 COPY . /workspace
 
 ARG BUILD_TYPE=Release
-ENV BUILD_DIR=/workspace/build-emscripten
+ENV BUILD_DIR=/workspace/otclient/build-emscripten
 RUN mkdir -p ${BUILD_DIR}
 # Force complete rebuild by clearing all vcpkg and emscripten caches
 RUN source /opt/emsdk/emsdk_env.sh \
  && rm -rf ${VCPKG_ROOT}/buildtrees ${VCPKG_ROOT}/packages ${BUILD_DIR}/vcpkg_installed \
  && rm -rf /opt/emsdk/upstream/emscripten/cache \
- && cmake -G Ninja -S /workspace -B ${BUILD_DIR} \
+ && cmake -G Ninja -S /workspace/otclient -B ${BUILD_DIR} \
     -DWASM=ON \
     -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=/opt/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake \
     -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
     -DVCPKG_TARGET_TRIPLET=wasm32-emscripten-pthread \
-    -DVCPKG_OVERLAY_TRIPLETS=/workspace/browser/triplets \
-    -DVCPKG_OVERLAY_PORTS=/workspace/browser/overlay-ports \
+    -DVCPKG_OVERLAY_TRIPLETS=/workspace/otclient/browser/triplets \
+    -DVCPKG_OVERLAY_PORTS=/workspace/otclient/browser/overlay-ports \
     -DVCPKG_BUILD_TYPE=${BUILD_TYPE} \
     -DWASM_USE_WASM_EXCEPTIONS=OFF \
     -DOPTIONS_ENABLE_IPO=OFF \
@@ -81,5 +81,5 @@ RUN source /opt/emsdk/emsdk_env.sh \
 # NOSONAR: minimal BusyBox stage used only to package static artifacts, root default is acceptable
 FROM busybox:latest AS web-artifacts
 WORKDIR /otclient-web
-COPY --from=builder /workspace/build-emscripten/bin/ .
+COPY --from=builder /workspace/otclient/build-emscripten/bin/ .
 CMD ["sh"]

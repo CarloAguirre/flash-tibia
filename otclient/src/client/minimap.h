@@ -98,11 +98,13 @@ public:
     std::pair<MinimapBlock_ptr, MinimapTile> threadGetTile(const Position& pos);
 
     bool loadImage(const std::string& fileName, const Position& topLeft, float colorFactor);
+    bool loadClientMinimap(const std::string& directory);
     void saveImage(const std::string& fileName, const Rect& mapRect);
     bool loadOtmm(const std::string& fileName);
     void saveOtmm(const std::string& fileName);
 
 private:
+    bool loadClientMinimapImage(const std::string& fileName, const Position& topLeft);
     Rect calcMapRect(const Rect& screenRect, const Position& mapCenter, float scale) const;
     bool hasBlock(const Position& pos) { return m_tileBlocks[pos.z].contains(getBlockIndex(pos)); }
     MinimapBlock& getBlock(const Position& pos)
