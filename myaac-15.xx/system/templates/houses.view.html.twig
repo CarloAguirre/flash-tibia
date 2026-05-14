@@ -1,0 +1,32 @@
+{% set title = houseName %}
+{% set content %}
+
+{% if errors is not empty %}
+	{% for error in errors %}
+		<p class="error">{{ error }}</p>
+	{% endfor %}
+{% else %}
+<table border="0" cellpadding="4" cellspacing="1" width="100%">
+	<tr style="display: inline-flex;">
+		<td><img src="{{ imgPath }}"></td>
+		<td>
+			{{ bedsMessage }} and has a size of <b>{{ houseSize }} square meters</b>.
+
+			{% if rentType != 'never' %}
+				The {{ rentType }} is <b>{{ houseRent }} gold</b> and will be debited to the bank account on <b>{{ config.lua.serverName }}</b>.
+			{% endif %}
+			<br>
+
+			{% if owner is not empty  %}
+			The house has been rented by <b>{{ owner|raw }}</b>.
+			{% else %}
+			No one has bought this house yet.
+			{% endif %}
+		</td>
+	</tr>
+</table>
+{% endif %}
+
+{% endset %}
+{% include 'tables.headline.html.twig' %}
+<br><br>

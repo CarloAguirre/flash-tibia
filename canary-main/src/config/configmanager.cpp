@@ -77,6 +77,7 @@ bool ConfigManager::load() {
 		loadStringConfig(L, MYSQL_USER, "mysqlUser", "root");
 	}
 
+	loadBoolConfig(L, AI_GATEWAY_ENABLED, "aiGatewayEnabled", false);
 	loadBoolConfig(L, AIMBOT_HOTKEY_ENABLED, "hotkeyAimbotEnabled", true);
 	loadBoolConfig(L, ALLOW_CHANGEOUTFIT, "allowChangeOutfit", true);
 	loadBoolConfig(L, ALLOW_RELOAD, "allowReload", false);
@@ -209,6 +210,7 @@ bool ConfigManager::load() {
 	loadFloatConfig(L, ANIMUS_MASTERY_MONSTERS_XP_MULTIPLIER, "animusMasteryMonstersXpMultiplier", 0.1);
 
 	loadIntConfig(L, ACTIONS_DELAY_INTERVAL, "timeBetweenActions", 200);
+	loadIntConfig(L, AI_GATEWAY_TIMEOUT_MS, "aiGatewayTimeoutMs", 2500);
 	loadIntConfig(L, ADVENTURERSBLESSING_LEVEL, "adventurersBlessingLevel", 21);
 	loadIntConfig(L, BESTIARY_KILL_MULTIPLIER, "bestiaryKillMultiplier", 1);
 	loadIntConfig(L, BLACK_SKULL_DURATION, "blackSkullDuration", 45);
@@ -358,6 +360,7 @@ bool ConfigManager::load() {
 	loadIntConfig(L, AUGMENT_STRONG_IMPACT_PERCENT, "augmentStrongImpactPercent", 7);
 	loadIntConfig(L, ANIMUS_MASTERY_MONSTERS_TO_INCREASE_XP_MULTIPLIER, "animusMasteryMonstersToIncreaseXpMultiplier", 10);
 
+	loadStringConfig(L, AI_GATEWAY_URL, "aiGatewayUrl", "http://127.0.0.1:8095/v1/chat");
 	loadStringConfig(L, CORE_DIRECTORY, "coreDirectory", "data");
 	loadStringConfig(L, DATA_DIRECTORY, "dataPackDirectory", "data-otservbr-global");
 	loadStringConfig(L, DEFAULT_PRIORITY, "defaultPriority", "high");

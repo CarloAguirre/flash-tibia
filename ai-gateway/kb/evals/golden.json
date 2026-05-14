@@ -1,0 +1,83 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "cases": [
+    {
+      "id": "golden.hunt.rotworms",
+      "text": "where can I hunt rotworms at level 8?",
+      "context": { "player": { "level": 8 } },
+      "expectedTopId": "hunt.rookgaard_rotworms",
+      "expectedKind": "hunt"
+    },
+    {
+      "id": "golden.hunt.rookgaard_rats",
+      "text": "I am level 3 in Rookgaard, where can I hunt rats?",
+      "context": { "player": { "level": 3 } },
+      "expectedTopId": "hunt.rookgaard_sewers",
+      "expectedKind": "hunt"
+    },
+    {
+      "id": "golden.npc.oracle",
+      "text": "what does the oracle do?",
+      "context": { "player": { "level": 8 } },
+      "expectedTopId": "npc.the_oracle",
+      "expectedKind": "npc"
+    },
+    {
+      "id": "golden.npc.xodet",
+      "text": "where can I buy potions and runes?",
+      "context": { "player": { "level": 20 } },
+      "expectedTopId": "npc.xodet",
+      "expectedKind": "npc"
+    },
+    {
+      "id": "golden.npc.mail",
+      "text": "who sells parcels and labels for mail?",
+      "context": { "player": { "level": 12 } },
+      "expectedTopId": "npc.benjamin",
+      "expectedKind": "npc"
+    },
+    {
+      "id": "golden.location.thais",
+      "text": "tell me about Thais",
+      "context": { "player": { "level": 12 } },
+      "expectedTopId": "location.thais",
+      "expectedKind": "location"
+    },
+    {
+      "id": "golden.server.rates",
+      "text": "what are the server rates and protection level?",
+      "context": { "player": { "level": 20 } },
+      "expectedTopId": "server.identity",
+      "expectedKind": "server_rule"
+    },
+    {
+      "id": "golden.route.oracle_metadata",
+      "text": "show me the route to the oracle in Rookgaard",
+      "context": { "player": { "level": 8 } },
+      "expectedTopId": "route.rookgaard_oracle",
+      "expectedKind": "route"
+    },
+    {
+      "id": "golden.no_match.spaceship",
+      "text": "how do I tame a crystal spaceship?",
+      "context": { "player": { "level": 8 } },
+      "expectedNoMatch": true
+    },
+    {
+      "id": "golden.recommendation.level8_next",
+      "mode": "recommendation",
+      "text": "what should I do next at level 8?",
+      "context": { "player": { "level": 8 } },
+      "expectedTopId": "recommendation.oracle_level_8",
+      "expectedKind": "recommendation"
+    },
+    {
+      "id": "golden.recommendation.supplies",
+      "mode": "recommendation",
+      "text": "what supplies should I buy before cave hunts?",
+      "context": { "player": { "level": 6 } },
+      "expectedTopId": "recommendation.basic_supplies",
+      "expectedKind": "recommendation"
+    }
+  ]
+}

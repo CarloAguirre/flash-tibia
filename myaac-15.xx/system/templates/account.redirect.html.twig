@@ -1,0 +1,18 @@
+{% set title = 'Login Successful' %}
+{% set background = config('darkborder') %}
+{% set content %}
+<table style="width:100%;" >
+	<tr>
+		<td>You have logged in.<br/>Press <a href="{{ redirect }}" >here</a> if you are not returned automatically.</td>
+	</tr>
+</table>
+{% endset %}
+{% include 'tables.headline.html.twig' %}
+
+<script language="javascript" type="text/javascript">
+	// Automatic redirect
+	setTimeout ("automaticRedirect()", 1000);
+	function automaticRedirect() {
+		window.location = "{{ redirect|raw }}";
+	}
+</script>

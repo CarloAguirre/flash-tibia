@@ -1,0 +1,67 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "locations": [
+    {
+      "id": "location.dawnport",
+      "name": "Dawnport",
+      "townId": 2,
+      "summary": "Starter island and tutorial area with beginner creatures such as trolls, minotaurs, rotworms, rats, salamanders, and dawnflies.",
+      "keywords": ["dawnport", "starter", "tutorial", "beginner", "new player", "low level", "nivel bajo", "principiante"],
+      "source": [
+        "canary-main/data-otservbr-global/lib/tables/town.lua",
+        "canary-main/data-otservbr-global/startup/tables/writeable.lua"
+      ]
+    },
+    {
+      "id": "location.rookgaard",
+      "name": "Rookgaard",
+      "townId": 3,
+      "summary": "Rookie island with academy, sewers, local merchants, the Oracle, and early quests such as Troll Cave and Katana Quest.",
+      "keywords": ["rookgaard", "rook", "academy", "oracle", "sewer", "sewers", "troll cave", "rookie"],
+      "source": [
+        "canary-main/data-otservbr-global/lib/tables/town.lua",
+        "canary-main/data-otservbr-global/npc/al_dee.lua",
+        "canary-main/data-otservbr-global/startup/tables/chest.lua"
+      ]
+    },
+    {
+      "id": "location.thais",
+      "name": "Thais",
+      "townId": 8,
+      "position": { "x": 32265, "y": 32164, "z": 7 },
+      "summary": "Mainland city available from the Oracle town choices, commonly used as a central city for mainland play.",
+      "keywords": ["thais", "mainland", "town", "city", "central", "oracle"],
+      "source": [
+        "canary-main/data-otservbr-global/lib/tables/town.lua",
+        "canary-main/data-otservbr-global/npc/the_oracle.lua",
+        "canary-main/data-otservbr-global/scripts/world_changes/fury_gates.lua"
+      ]
+    },
+    {
+      "id": "location.carlin",
+      "name": "Carlin",
+      "townId": 6,
+      "position": { "x": 32263, "y": 31848, "z": 7 },
+      "summary": "Northern mainland city available from the Oracle town choices.",
+      "keywords": ["carlin", "mainland", "town", "city", "oracle"],
+      "source": [
+        "canary-main/data-otservbr-global/lib/tables/town.lua",
+        "canary-main/data-otservbr-global/npc/the_oracle.lua",
+        "canary-main/data-otservbr-global/scripts/world_changes/fury_gates.lua"
+      ]
+    },
+    {
+      "id": "location.venore",
+      "name": "Venore",
+      "townId": 9,
+      "position": { "x": 32834, "y": 32082, "z": 7 },
+      "summary": "Mainland city available from the Oracle town choices.",
+      "keywords": ["venore", "mainland", "town", "city", "oracle"],
+      "source": [
+        "canary-main/data-otservbr-global/lib/tables/town.lua",
+        "canary-main/data-otservbr-global/npc/the_oracle.lua",
+        "canary-main/data-otservbr-global/scripts/world_changes/fury_gates.lua"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{{ include('admin.news.table.html.twig', {type: 1, title: 'News'}) }}
+{{ include('admin.news.table.html.twig', {type: 2, title: 'Tickers'}) }}
+{{ include('admin.news.table.html.twig', {type: 3, title: 'Articles'}) }}
+
+<script>
+	$(function () {
+		$('.tb_datatable').DataTable({
+			"order": [[0, "desc"]]
+		});
+	});
+</script>

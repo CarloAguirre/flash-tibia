@@ -1,0 +1,39 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "source": [
+    "canary-main/config.lua",
+    "docs/eldera-copilot-roadmap.md"
+  ],
+  "rules": [
+    {
+      "id": "server.identity",
+      "title": "Eldera Online 15 server profile",
+      "summary": "Eldera Online 15 runs the Canary 15 stack with PvP enabled, protection level 7, and baseline rates set to 1x for experience, skill, magic, loot, and spawn.",
+      "keywords": ["server", "world", "pvp", "protection", "rates", "exp", "loot", "skill", "magic", "spawn", "eldera"],
+      "facts": {
+        "serverName": "Eldera Online 15",
+        "worldType": "pvp",
+        "protectionLevel": 7,
+        "rates": {
+          "exp": 1,
+          "skill": 1,
+          "magic": 1,
+          "loot": 1,
+          "spawn": 1
+        }
+      }
+    },
+    {
+      "id": "copilot.phase2.policy",
+      "title": "Copilot Phase 2 policy",
+      "summary": "Copilot is read-only in this phase. Gemini, route execution, tasker, and direct gameplay actions are disabled while the curated KB contract is stabilized.",
+      "keywords": ["copilot", "gemini", "route", "routes", "tasker", "action", "automation", "policy", "disabled", "read-only", "solo lectura"],
+      "facts": {
+        "geminiEnabled": false,
+        "routeExecutionEnabled": false,
+        "taskerEnabled": false,
+        "actionsEnabled": false
+      }
+    }
+  ]
+}

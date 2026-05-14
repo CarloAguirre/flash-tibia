@@ -1,0 +1,165 @@
+<div style="text-align:center"><h2>Welcome to guild manager!</h2></div>
+Here you can change names of ranks, delete and add ranks, pass leadership to other guild member and delete guild.
+<br/><br/>
+<table style="clear:both" border="0" cellpadding="0" cellspacing="0" width="100%">
+	<tr bgcolor="{{ config.darkborder }}">
+		<td width="170">
+			<span style="color: red"><b>Option</b></span>
+		</td>
+		<td>
+			<span style="color: red"><b>Description</b></span>
+		</td>
+	</tr>
+	<tr bgcolor="{{ config.lightborder }}">
+		<td width="170">
+			<b><a href="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=pass_leadership">Pass Leadership</a></b>
+		</td>
+		<td>
+			<b>Pass leadership of guild to other guild member.</b>
+		</td>
+	</tr>
+	<tr bgcolor="{{ config.darkborder }}">
+		<td width="170">
+			<b><a href="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=delete_guild">Delete Guild</a></b>
+		</td>
+		<td>
+			<b>Delete guild, kick all members.</b>
+		</td>
+	</tr>
+	<tr bgcolor="{{ config.lightborder }}">
+		<td width="170">
+			<b><a href="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=change_description">Change Description</a></b>
+		</td>
+		<td>
+			<b>Change description of guild.</b>
+		</td>
+	</tr>
+	{% if constant('MOTD_EXISTS') %}
+	<tr bgcolor="{{ config.darkborder }}">
+		<td width="170">
+			<b><a href="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=change_motd">Change MOTD</a></b>
+		</td>
+		<td>
+			<b>Change MOTD of guild.</b>
+		</td>
+	</tr>
+	{% endif %}
+	<tr bgcolor="{{ config.lightborder }}">
+		<td width="170">
+			<b><a href="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=change_logo">Change guild logo</a></b>
+		</td>
+		<td>
+			<b>Upload new guild logo.</b>
+		</td>
+	</tr>
+</table>
+<br/>
+{% set title = 'Add new rank' %}
+{% set content %}
+<table style="width:100%;">
+	<tr>
+		<td width="120" valign="top">New rank name:</td>
+		<td>
+			<form action="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=add_rank" method="post">
+				{{ csrf() }}
+				<input type="text" name="rank_name" size="20"/>
+				<input type="submit" value="Add"/>
+			</form>
+		</td>
+	</tr>
+</table>
+{% endset %}
+{% include 'tables.headline.html.twig' %}
+
+{% set title = 'Change rank names and levels' %}
+{% set content %}
+<form action="{{ getLink('guilds') }}?action=save_ranks&guild={{ guild.getName() }}" method="post">
+	{{ csrf() }}
+	<table style="clear:both" border="0" cellpadding="0" cellspacing="0" width="100%">
+		<tr bgcolor="{{ config.vdarkborder }}">
+			<td rowspan="2" width="120" align="center">
+				<span style="color: white"><b>ID/Delete Rank</b></span>
+			</td>
+			<td rowspan="2" width="300">
+				<span style="color: white"><b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Name</b></span>
+			</td>
+			<td colspan="3" align="center">
+				<span style="color: white"><b>Level of RANK in guild</b></span>
+			</td>
+		</tr>
+		<tr bgcolor="{{ config.vdarkborder }}">
+			<td align="center" bgcolor="red">
+				<span style="color: white"><b>Leader (3)</b></span>
+			</td>
+			<td align="center" bgcolor="yellow">
+				<span style="color: black"><b>Vice (2)</b></span>
+			</td>
+			<td align="center" bgcolor="green">
+				<span style="color: white"><b>Member (1)</b></span>
+			</td>
+		</tr>
+		{% set i = 0 %}
+		{% for rank in rank_list %}
+		<tr bgcolor="{{ getStyle(i) }}">
+			<td align="center">{{ rank.getId() }} //
+				<form action="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=delete_rank" method="post" style="display: inline;">
+					{{ csrf() }}
+					<input type="hidden" name="rankid" value="{{ rank.getId() }}" />
+					<input type="image" src="/images/news/delete.png" border="0" alt="Delete" />
+				</form>
+			</td>
+			<td>
+				<input type="text" name="{{ rank.getId() }}_name" value="{{ rank.getName() }}" size="35"/>
+			</td>
+			<td align="center">
+				<input type="radio" name="{{ rank.getId() }}_level" value="3"
+				{% if rank.getLevel() == 3 %} checked="checked"{% endif %}/>
+			</td>
+			<td align="center">
+				<input type="radio" name="{{ rank.getId() }}_level" value="2"
+				{% if rank.getLevel() == 2 %} checked="checked"{% endif %}/>
+			</td>
+			<td align="center">
+				<input type="radio" name="{{ rank.getId() }}_level" value="1"
+				{% if rank.getLevel() == 1 %} checked="checked"{% endif %}/>
+			</td>
+		</tr>
+			{% set i = i + 1 %}
+		{% endfor %}
+		<tr bgcolor="{{ config.vdarkborder }}">
+			<td>&nbsp;</td>
+			<td>&nbsp;</td>
+			<td colspan="3" align="center">
+				<input type="submit" value="Save All"/>
+			</td>
+		</tr>
+	</table>
+</form>
+
+<h3>Ranks info:</h3>
+<b>0. Owner of guild</b> - it's highest rank, only one player in guild may has this rank. Player with this rank can:
+<li>Invite/Cancel Invitation/Kick Player from guild</li>
+<li>Change ranks of all players in guild</li>
+<li>Delete guild or pass leadership to other guild member</li>
+<li>Change names, levels (leader, vice, member), add and delete ranks</li>
+<li>Change {% if constant('MOTD_EXISTS') %}MOTD, {% endif %}logo and description of guild</li>
+<hr/>
+<b>1. Leader</b> - it's second rank in guild. Player with this rank can:
+<li>Invite/Cancel Invitation/Kick Player from guild (only with lower rank than his)</li>
+<li>Change ranks of players with lower rank level ("vice leader", "member") in guild</li>
+<hr>
+<b>2. Vice Leader</b> - it's third rank in guild. Player with this rank can:
+<li>Invite/Cancel Invitation</li>
+<li>Change ranks of players with lower rank level ("member") in guild</li>
+<hr>
+<b>3. Member</b> - it's lowest rank in guild. Player with this rank can:
+<li>Be a member of guild</li>
+<br/>
+{% endset %}
+{% include 'tables.headline.html.twig' %}
+	<div style="text-align:center">
+	<form action="{{ getLink('guilds') }}?action=show&guild={{ guild.getName() }}" method="post">
+		{{ csrf() }}
+		{{ include('buttons.back.html.twig') }}
+	</form>
+</div>

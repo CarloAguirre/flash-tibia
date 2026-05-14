@@ -1,0 +1,23 @@
+<div class="card card-info card-outline">
+	<div class="card-header">
+		<h5 class="m-0">Templates</h5>
+	</div>
+	<div class="card-body">
+		<form method="post" action="?p=menus">
+			{{ csrf() }}
+			<p>Please choose template in which you want to edit menu items.</p>
+			<div class="col-md-6">
+				<div class="input-group input-group-sm">
+					<select id="template" name="template" class="form-control">
+						{% for template in templates %}
+							<option value="{{ template.template }}">{{ template.template }}</option>
+						{% endfor %}
+					</select>
+					<span class="input-group-append">
+                    <button type="submit" class="btn btn-info btn-flat">Edit!</button>
+                  </span>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>

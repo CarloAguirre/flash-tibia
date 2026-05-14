@@ -1,0 +1,13 @@
+{
+  "name": "eldera-ai-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test",
+    "validate:kb": "node scripts/validate-kb.js",
+    "evaluate:kb": "node scripts/evaluate-kb.js"
+  }
+}

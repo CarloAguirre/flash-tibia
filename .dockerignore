@@ -1,0 +1,11 @@
+*
+!otclient/
+!otclient/**
+
+otclient/.git/
+otclient/build/
+otclient/build-*/
+otclient/cmake-build*/
+otclient/vcpkg/
+otclient/vcpkg_installed/
+otclient/*.log

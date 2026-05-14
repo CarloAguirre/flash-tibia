@@ -1,0 +1,47 @@
+<b>Boards</b>
+<table width="100%">
+	<thead>
+	<tr bgcolor="{{ config.vdarkborder }}" class="white">
+		<th>
+			<span style="font-size: 10px"><b>Board</b></span>
+		</th>
+		<th>
+			<span style="font-size: 10px"><b>Posts</b></span>
+		</th>
+		<th>
+			<span style="font-size: 10px"><b>Threads</b></span>
+		</th>
+		<th align="center">
+			<span style="font-size: 10px"><b>Last Post</b></span>
+		</th>
+		{% if canEdit %}
+			<th>
+				<span style="font-size: 10px"><b>Options</b></span>
+			</th>
+		{% endif %}
+	</tr>
+	</thead>
+	{% set i = 0 %}
+	{% for board in boards %}
+	{% set i = i + 1 %}
+	<tr bgcolor="{{ getStyle(i) }}">
+		<td>
+			<a href="{{ board.link }}">{{ board.name }}</a><br /><small>{{ board.description }}</small>
+		</td>
+		<td>{{ board.posts }}</td>
+		<td>{{ board.threads }}</td>
+		<td>
+		{% if board.last_post.name is not null %}
+		{{ board.last_post.date|date("d.m.y H:i:s") }}<br/>by {{ board.last_post.player_link|raw }}
+		{% else %}
+		No posts
+		{% endif %}
+		</td>
+		{% if canEdit %}
+			<td>
+				{{ include('forum.admin.links.html.twig', {id: board.id, hide: board.hide, i: i }) }}
+			</td>
+		{% endif %}
+	</tr>
+	{% endfor %}
+</table>

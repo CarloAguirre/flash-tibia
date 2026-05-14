@@ -160,6 +160,7 @@ function playerLoginGlobal.onLogin(player)
 	player:registerEvent("DropLoot")
 	player:registerEvent("BossParticipation")
 	player:registerEvent("UpdatePlayerOnAdvancedLevel")
+	player:registerEvent("ExtendedOpcode")
 
 	if vocation and vocation:getBaseId() == VOCATION.BASE_ID.MONK then
 		local kv = player:kv()

@@ -1,0 +1,91 @@
+{% if (action == 'edit' or action == 'new') %}
+	<div class="card card-info card-outline">
+		<div class="card-header">
+			<h5 class="m-0">{% if action == 'edit' %}Edit{% else %}Add{% endif %} page</h5>
+		</div>
+		<form id="form" class="form-horizontal" method="post">
+			{{ csrf() }}
+			<input type="hidden" name="action" value="{{ action }}" />
+			{% if action == 'edit' %}
+				<input type="hidden" name="id" value="{{ id }}"/>
+			{% endif %}
+			<div class="card-body">
+				<div class="form-group row">
+					<label for="title">Page Title</label>
+					<input type="text" id="title" name="title" class="form-control" autocomplete="off" maxlength="29" style="cursor: auto;" value="{{ title }}" required>
+				</div>
+				<div class="form-group row">
+					<label for="name">Link/name</label>
+					<input type="text" id="name" name="name" class="form-control" autocomplete="off" maxlength="29" style="cursor: auto;" value="{{ name }}" required>
+				</div>
+				<div class="form-group row">
+					<label for="access">Access</label>
+					<select class="form-control" id="access" name="access">
+						<option value="0" {% if access == 0 %}selected{% endif %}>Guest*</option>
+						{% for id, group in groups %}
+							<option value="{{ group.getId() }}"{% if access == group.getId() %} selected{% endif %}>{{ group.getName()|title }}</option>
+						{% endfor %}
+					</select>
+					<br>* Guest means everyone will have access to this page. Player means registered and logged in user.
+				</div>
+				<div class="form-group row">
+					<label for="php">PHP
+						<input type="checkbox" id="php" name="php"
+							   title="Check if page should be executed as PHP"
+							   value="1"{% if php %} checked{% endif %}{% if action == 'edit' %} disabled{% endif %}/>
+						{% if action == 'edit' %}
+							<input type="hidden" name="php" value="{% if php %}1{% else %}0{% endif %}"/>
+						{% endif %}</label>
+				</div>
+				{% if not php %}
+					<div class="form-group row">
+						<label for="enable_tinymce">Enable TinyMCE
+							<input type="checkbox" id="enable_tinymce" name="enable_tinymce" title="Check if you want to use TinyMCE Editor" value="1"{% if enable_tinymce %} checked{% endif %}{% if action == 'edit' %} disabled{% endif %}/>
+							{% if action == 'edit' %}
+								<input type="hidden" name="enable_tinymce" value="{% if enable_tinymce %}1{% else %}0{% endif %}"/>
+							{% endif %}
+						</label>
+					</div>
+				{% endif %}
+
+				<label for="editor">Content</label>
+				<div class="form-group row">
+					<textarea class="form-control" id="editor" name="body" maxlength="65000" cols="50" rows="10">{{ body|raw }}</textarea>
+				</div>
+			</div>
+			<div class="card-footer">
+				<button type="submit" class="btn btn-info"><i class="fas fa-update"></i> {% if action == 'edit' %}Update{% else %}Add{% endif %}</button>
+				<button type="button" onclick="window.location = '{{ constant('ADMIN_URL') }}?p=pages';" class="btn btn-danger float-right"><i class="fas fa-cancel"></i> Cancel</button>
+			</div>
+		</form>
+	</div>
+
+	{{ include('tinymce.html.twig') }}
+
+	<script type="text/javascript">
+		$(function () {
+			$('#enable_tinymce').on('change', function (e) {
+				if (!this.checked) {
+					tinymce.remove('#editor');
+				} else {
+					$('#php').prop('checked', false);
+					if (tinymce.get('#editor')!== null) {
+						tinymce.activeEditor.show();
+					} else {
+						tinymceInit();
+					}
+				}
+			});
+
+			{% if not php and enable_tinymce %}
+			tinymceInit();
+			{% endif %}
+
+			function decodeHtml(html) {
+				var txt = document.createElement("textarea");
+				txt.innerHTML = html;
+				return txt.value;
+			}
+		});
+	</script>
+{% endif %}

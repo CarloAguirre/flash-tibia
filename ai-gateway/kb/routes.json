@@ -1,0 +1,32 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "routes": [
+    {
+      "id": "route.rookgaard_oracle",
+      "name": "Rookgaard Academy to The Oracle",
+      "status": "preview-only",
+      "summary": "The Oracle is on the upper floor of the Rookgaard Academy, above Seymour. This route is a visual preview only; Copilot does not move the character.",
+      "keywords": ["oracle", "route", "path", "rookgaard", "academy", "vocation", "mainland", "ruta", "camino"],
+      "destination": { "x": 32104, "y": 32190, "z": 6, "label": "The Oracle" },
+      "waypoints": [
+        { "x": 32104, "y": 32189, "z": 7, "label": "Seymour, inside Rookgaard Academy" },
+        { "x": 32104, "y": 32190, "z": 7, "label": "Use the academy stairs to the upper floor" },
+        { "x": 32104, "y": 32190, "z": 6, "label": "The Oracle" }
+      ],
+      "notes": ["Preview-only minimap markers.", "No autowalk or action execution is enabled."],
+      "source": [
+        "canary-main/data-otservbr-global/npc/the_oracle.lua",
+        "canary-main/data-otservbr-global/world/otservbr-npc.xml",
+        "docs/eldera-copilot-roadmap.md"
+      ]
+    },
+    {
+      "id": "route.oracle_mainland_choices",
+      "name": "Oracle mainland town choices",
+      "status": "documented-only",
+      "summary": "The Oracle supports Carlin, Thais, and Venore as town choices. This does not enable automatic travel or map overlays yet.",
+      "keywords": ["oracle", "carlin", "thais", "venore", "town", "mainland", "route", "ruta"],
+      "source": ["canary-main/data-otservbr-global/npc/the_oracle.lua"]
+    }
+  ]
+}

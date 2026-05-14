@@ -1,0 +1,170 @@
+CopilotMessageLabel < UILabel
+  font: verdana-11px-antialised
+  color: #c0c0c0ff
+  height: 16
+  margin-bottom: 4
+  text-wrap: true
+  text-auto-resize: true
+
+CopilotCardLabel < UILabel
+  font: verdana-11px-antialised
+  color: #c0c0c0ff
+  height: 14
+  text-wrap: true
+  text-auto-resize: false
+
+CopilotCardPanel < Panel
+  height: 72
+  margin-top: 2
+  margin-bottom: 6
+  padding: 5
+  image-source: /images/ui/panel_flat
+  image-border: 1
+  layout:
+    type: verticalBox
+    spacing: 2
+
+  CopilotCardLabel
+    id: cardTitle
+    height: 14
+    color: #f0df9fff
+
+  CopilotCardLabel
+    id: cardSummary
+    height: 26
+    color: #d7d7d7ff
+
+  CopilotCardLabel
+    id: cardReasons
+    height: 26
+    color: #9ee493ff
+
+  CopilotCardLabel
+    id: cardCautions
+    height: 26
+    color: #ffb86cff
+
+  CopilotCardLabel
+    id: cardMeta
+    height: 12
+    color: #8ab4f8ff
+
+MiniWindow
+  id: elderaCopilotWindow
+  !text: tr('Eldera Copilot')
+  height: 240
+  min-height: 210
+  max-height: 420
+  @onClose: modules.game_ai_copilot.hide()
+  @onOpen: modules.game_ai_copilot.onOpen()
+  &save: true
+
+  UIWidget
+    id: miniwindowIcon
+    anchors.top: miniwindowHeader.top
+    anchors.left: miniwindowHeader.left
+    margin-top: 2
+    margin-left: 4
+    size: 12 12
+    image-source: /images/topbuttons/motd
+    image-smooth: false
+
+  Label
+    id: miniwindowTitle
+    anchors.top: miniwindowHeader.top
+    anchors.left: miniwindowHeader.left
+    anchors.right: miniwindowHeader.right
+    margin-top: 2
+    margin-left: 20
+    margin-right: 50
+    font: verdana-11px-monochrome
+    height: 13
+    color: #9d9d9dff
+    !text: tr('Eldera Copilot')
+
+  Panel
+    id: contentsPanel
+    anchors.fill: parent
+    margin: 20 7 7 7
+    focusable: false
+
+    Panel
+      id: inputPanel
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: parent.bottom
+      height: 24
+      focusable: false
+
+      TextEdit
+        id: inputText
+        focusable: true
+        anchors.left: parent.left
+        anchors.right: sendButton.left
+        anchors.verticalCenter: parent.verticalCenter
+        height: 18
+        margin-right: 6
+        max-length: 240
+        shift-navigation: true
+        placeholder: Ask Eldera Copilot...
+        placeholder-color: #777777ff
+
+      Button
+        id: sendButton
+        !text: tr('Send')
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        size: 50 20
+
+    Panel
+      id: routePanel
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.bottom: inputPanel.top
+      height: 0
+      visible: false
+      focusable: false
+
+      Label
+        id: routeText
+        anchors.left: parent.left
+        anchors.right: clearRouteButton.left
+        anchors.verticalCenter: parent.verticalCenter
+        height: 14
+        margin-right: 6
+        font: verdana-11px-antialised
+        color: #8ab4f8ff
+        text-auto-resize: false
+
+      Button
+        id: clearRouteButton
+        !text: tr('Clear')
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        size: 48 20
+
+    ScrollablePanel
+      id: historyPanel
+      anchors.top: parent.top
+      anchors.left: parent.left
+      anchors.right: historyScrollBar.left
+      anchors.bottom: routePanel.top
+      margin-bottom: 7
+      image-source: /images/ui/3pixel_frame_borderimage
+      image-border: 4
+      padding: 6
+      padding-right: 8
+      vertical-scrollbar: historyScrollBar
+      layout:
+        type: verticalBox
+        align-bottom: true
+
+    VerticalQtScrollBar
+      id: historyScrollBar
+      anchors.top: parent.top
+      anchors.bottom: routePanel.top
+      anchors.right: parent.right
+      step: 14
+      pixels-scroll: true
+      margin-left: 3
+      margin-bottom: 7

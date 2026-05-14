@@ -10,6 +10,7 @@
 #pragma once
 
 #include "lua/scripts/luascript.hpp"
+#include "lua/functions/core/network/ai_gateway_functions.hpp"
 #include "lua/functions/core/network/network_message_functions.hpp"
 #include "lua/functions/core/network/webhook_functions.hpp"
 
@@ -22,6 +23,7 @@ public:
 	~CoreNetworkFunctions() override = default;
 
 	static void init(lua_State* L) {
+		AiGatewayFunctions::init(L);
 		NetworkMessageFunctions::init(L);
 		WebhookFunctions::init(L);
 	}

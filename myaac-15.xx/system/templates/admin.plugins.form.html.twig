@@ -1,0 +1,23 @@
+<div id="install_plugin">
+	<div class="card card-info card-outline">
+		<div class="card-header">
+			<h5 class="m-0">Install plugin
+				<a href="?p=plugins&check-updates" class="btn btn-primary float-right">Check for updates</a>
+			</h5>
+		</div>
+		<form enctype="multipart/form-data" method="post" action="{{ constant('ADMIN_URL') }}?p=plugins">
+			{{ csrf() }}
+			<div class="card-body">
+				<input type="hidden" name="upload_plugin"/>
+
+				<div class="form-group">
+					<label>File input</label>
+					<input type="file" name="plugin" accept=".zip">
+				</div>
+			</div>
+			<div class="card-footer">
+				<button type="submit" class="btn btn-info" {% if not pluginUploadEnabled %}disabled{% endif %}>Upload</button>
+			</div>
+		</form>
+	</div>
+</div>

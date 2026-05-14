@@ -1,0 +1,46 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "npcs": [
+    {
+      "id": "npc.the_oracle",
+      "name": "The Oracle",
+      "role": "Vocation and mainland town selection",
+      "summary": "The Oracle handles the irreversible choice of vocation and a town choice among Carlin, Thais, and Venore for eligible rook characters.",
+      "keywords": ["oracle", "vocation", "profession", "mainland", "thais", "carlin", "venore", "level 8", "town"],
+      "levelRange": { "min": 8, "max": 10 },
+      "source": ["canary-main/data-otservbr-global/npc/the_oracle.lua"]
+    },
+    {
+      "id": "npc.al_dee",
+      "name": "Al Dee",
+      "role": "Rookgaard general equipment merchant",
+      "summary": "Al Dee sells beginner supplies including backpacks, rope, shovel, torches, fishing rod, worms, and other basic tools.",
+      "keywords": ["al dee", "rope", "shovel", "backpack", "torch", "tools", "equipment", "merchant", "rookgaard", "suministros"],
+      "source": ["canary-main/data-otservbr-global/npc/al_dee.lua"]
+    },
+    {
+      "id": "npc.benjamin",
+      "name": "Benjamin",
+      "role": "Post office merchant",
+      "summary": "Benjamin sells labels, letters, and parcels and explains the mail system.",
+      "keywords": ["benjamin", "post", "mail", "letter", "parcel", "label", "correo"],
+      "source": ["canary-main/data-otservbr-global/npc/benjamin.lua"]
+    },
+    {
+      "id": "npc.frodo",
+      "name": "Frodo",
+      "role": "Thais food tavern",
+      "summary": "Frodo runs Frodo's Hut in Thais and sells food such as bread, cheese, ham, and meat.",
+      "keywords": ["frodo", "food", "bread", "cheese", "ham", "meat", "thais", "tavern", "comida"],
+      "source": ["canary-main/data-otservbr-global/npc/frodo.lua"]
+    },
+    {
+      "id": "npc.xodet",
+      "name": "Xodet",
+      "role": "Magic supplies merchant",
+      "summary": "Xodet sells potions, runes, wands, rods, spellbooks, and exercise magic weapons.",
+      "keywords": ["xodet", "potion", "potions", "runes", "wand", "rod", "spellbook", "magic", "mana", "health", "runa"],
+      "source": ["canary-main/data-otservbr-global/npc/xodet.lua"]
+    }
+  ]
+}

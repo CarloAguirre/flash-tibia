@@ -1,0 +1,68 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "rules": [
+    {
+      "id": "recommendation.rookgaard_sewers",
+      "title": "Start with Rookgaard sewers",
+      "summary": "For very low level rook characters, hunt rats in the Rookgaard sewers before moving to cave content.",
+      "levelRange": { "min": 2, "max": 5 },
+      "priority": 30,
+      "keywords": ["recommend", "next", "what should", "level 2", "level 3", "level 4", "level 5", "rookgaard", "rat", "rats", "sewer", "sewers", "hunt"],
+      "related": ["hunt.rookgaard_sewers", "npc.al_dee"],
+      "reasons": ["Matches the low-level range.", "The KB has a conservative rat hunt sourced from Rookgaard dialogue."],
+      "cautions": ["Upgrade to better equipment before deeper caves."],
+      "source": ["canary-main/data-otservbr-global/npc/al_dee.lua"]
+    },
+    {
+      "id": "recommendation.rookgaard_troll_cave",
+      "title": "Prepare for Troll Cave",
+      "summary": "At mid rookie levels, Troll Cave is a reasonable next step if the character carries a rope and basic supplies.",
+      "levelRange": { "min": 6, "max": 8 },
+      "priority": 45,
+      "keywords": ["recommend", "next", "what should", "level 6", "level 7", "level 8", "rookgaard", "troll", "troll cave", "hunt", "rope"],
+      "related": ["hunt.rookgaard_troll_cave", "npc.al_dee"],
+      "reasons": ["Fits a character moving beyond rats.", "The KB flags rope and underground caution for cave content."],
+      "cautions": ["Do not enter cave areas without a rope.", "Avoid being surrounded while under-geared."],
+      "source": [
+        "canary-main/data-otservbr-global/startup/tables/chest.lua",
+        "canary-main/data-otservbr-global/npc/al_dee.lua"
+      ]
+    },
+    {
+      "id": "recommendation.oracle_level_8",
+      "title": "Talk to The Oracle",
+      "summary": "At level 8, an eligible rook character should consider choosing a vocation and mainland town through The Oracle.",
+      "levelRange": { "min": 8, "max": 10 },
+      "priority": 90,
+      "keywords": ["recommend", "next", "what should", "level 8", "level 9", "level 10", "oracle", "vocation", "mainland", "town"],
+      "related": ["npc.the_oracle", "location.thais", "location.carlin", "location.venore"],
+      "reasons": ["The Oracle handles vocation and mainland town selection for eligible rook characters.", "The decision is important and should remain player-confirmed."],
+      "cautions": ["This is guidance only; Copilot will not choose vocation or town for the player."],
+      "source": ["canary-main/data-otservbr-global/npc/the_oracle.lua"]
+    },
+    {
+      "id": "recommendation.rotworms_cautious",
+      "title": "Try rotworms carefully",
+      "summary": "For level 8+ characters asking for hunting progression, rotworms are a cautious step after rats and trolls if supplies are ready.",
+      "levelRange": { "min": 8, "max": 14 },
+      "priority": 55,
+      "keywords": ["recommend", "next", "hunt", "hunting", "level 8", "rotworm", "rotworms", "carrion worm", "underground"],
+      "related": ["hunt.rookgaard_rotworms"],
+      "reasons": ["The KB lists rotworms as a next-step underground hunt.", "The level range matches early post-rook progression questions."],
+      "cautions": ["Avoid large pulls.", "Carry healing and a rope."],
+      "source": ["canary-main/data-otservbr-global/startup/tables/writeable.lua"]
+    },
+    {
+      "id": "recommendation.basic_supplies",
+      "title": "Buy basic supplies first",
+      "summary": "Before underground hunts, get a rope, shovel, backpack, and light source from a basic equipment merchant such as Al Dee.",
+      "levelRange": { "min": 2, "max": 12 },
+      "priority": 40,
+      "keywords": ["recommend", "next", "supplies", "supply", "rope", "shovel", "backpack", "torch", "equipment", "tools", "buy"],
+      "related": ["npc.al_dee"],
+      "reasons": ["Several starter hunts mention cave or underground risk.", "Al Dee sells the basic tools referenced by the KB."],
+      "cautions": ["This recommendation does not inspect inventory yet."],
+      "source": ["canary-main/data-otservbr-global/npc/al_dee.lua"]
+    }
+  ]
+}

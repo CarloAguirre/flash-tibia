@@ -64,13 +64,18 @@ loginProtocolPort = 7171
 gameProtocolPort = 7172
 statusProtocolPort = 7171
 maxPlayers = 0
-serverName = "OTServBR-Global"
-serverMotd = "Welcome to the OTServBR-Global!"
+serverName = "Eldera Online"
+serverMotd = "Welcome to Eldera Online!"
 statusTimeout = 5 * 1000
 replaceKickOnLogin = true
 maxPacketsPerSecond = 25
 maxPlayersOnlinePerAccount = 1
 maxPlayersOutsidePZPerAccount = 1
+
+-- Eldera Copilot
+aiGatewayEnabled = false
+aiGatewayUrl = "http://127.0.0.1:8095/v1/chat"
+aiGatewayTimeoutMs = 2500
 
 -- Packet Compression
 -- Minimize network bandwith and reduce ping

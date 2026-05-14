@@ -1,0 +1,125 @@
+{% if action %}
+	<div class="card card-info card-outline">
+		<div class="card-header">
+			<h5 class="m-0">{% if action == 'edit' %}Edit{% else %}Add{% endif %} {% if type == constant('NEWS') %}News{% elseif type == constant('TICKER') %}Ticker{% else %}Article{% endif %}</h5>
+		</div>
+		<form id="form" role="form" method="post">
+			{{ csrf() }}
+			<input type="hidden" name="action" value="{{ action == 'edit' ? 'edit' : 'new' }}" />
+			<div class="card-body " id="page-edit-table">
+				{% if action == 'edit' %}
+					<input type="hidden" name="id" value="{{ news_id }}"/>
+				{% endif %}
+
+				<div class="form-group row">
+					<label for="title">Title</label>
+					<input type="text" id="title" name="title" class="form-control" autocomplete="off" style="cursor: auto;" value="{{ title }}" required>
+				</div>
+
+				<label for="editor">Content</label>
+				<div class="form-group">
+					<textarea class="form-control" id="editor" name="body" maxlength="65000" cols="50" rows="5">{{ body|raw }}</textarea>
+				</div>
+
+				<div class="form-group row">
+					<label for="select-type">Type</label>
+					<select class="form-control" name="type" id="select-type">
+						<option value="{{ constant('NEWS') }}" {% if type == constant('NEWS') %}selected="selected"{% endif %}{% if action == 'edit' and type != constant('NEWS') %} disabled{% endif %}>News</option>
+						<option value="{{ constant('TICKER') }}" {% if type == constant('TICKER') %}selected="selected"{% endif %}{% if action == 'edit' and type != constant('TICKER') %} disabled{% endif %}>Ticker</option>
+						<option value="{{ constant('ARTICLE') }}" {% if type == constant('ARTICLE') %}selected="selected"{% endif %}{% if action == 'edit' and type != constant('ARTICLE') %} disabled{% endif %}>Article</option>
+					</select>
+				</div>
+
+				<div id="article-text" class="form-group row"{% if type is not defined or type != constant('ARTICLE') %} style="display: none;"{% endif %}>
+					<label for="article_text">Article short text</label>
+						<textarea class="form-control" name="article_text" id="article_text" cols="50" rows="5">{% if article_text is not empty %}{{ article_text }}{% endif %}</textarea>
+				</div>
+
+				<div id="article-image" class="form-group row"{% if type is not defined or type != constant('ARTICLE') %} style="display: none;"{% endif %}>
+					<label for="article_image">Article image</label>
+						<input class="form-control" type="text" name="article_image" id="article_image" value="{% if article_image is not empty %}{{ article_image }}{% else %}images/news/announcement.jpg{% endif %}"/>
+				</div>
+				<div class="form-group row">
+					{% if action == 'edit' %}
+						{% if player is defined %}
+							<div class="col-sm-6 pl-0">
+								<label for="author">Author</label>
+								<select class="form-control" id="author" name="original_id" disabled="disabled">
+									<option value="{{ player.getId() }}">{{ player.getName() }}</option>
+								</select>
+							</div>
+						{% endif %}
+					{% endif %}
+
+					<div class="col-sm-{{ (action == 'edit') ? '6' : '12' }} px-0">
+						<label for="player_id">{% if action == 'edit' %}Modified by{% else %}Author{% endif %}</label>
+						<select class="form-control" name="player_id" id="player_id">
+							{% for player in account_players %}
+								<option value="{{ player.getId() }}"{% if player_id is defined and player.getId() == player_id %} selected="selected"{% endif %}>{{ player.getName() }}</option>
+							{% endfor %}
+						</select>
+
+					</div>
+				</div>
+
+				{% if action != 'edit' %}
+					<div class="form-group row">
+						<label for="forum_section">Create forum thread in section:</label>
+							<select class="form-control" name="forum_section" id="forum_section">
+								<option value="-1">None</option>
+								{% for section in forum_boards %}
+									<option value="{{ section.id }}" {% if forum_section is defined and forum_section == section.id %}checked="yes"{% endif %}>{{ section.name }}</option>
+								{% endfor %}
+							</select>
+					</div>
+				{% elseif comments is not null %}
+					<input type="hidden" name="forum_section" id="forum_section" value="{{ comments }}"/>
+				{% endif %}
+
+				<div class="form-group row">
+					<label for="category">Category</label>
+					<div class="col-sm-12">
+						{% for id, cat in categories %}
+							<input type="radio" name="category" value="{{ id }}" {% if (category == 0 and id == 1) or (category == id) %}checked="yes"{% endif %}/>
+							<img src="{{ constant('BASE_URL') }}images/news/icon_{{ cat.icon_id }}_small.gif"/>
+						{% endfor %}
+					</div>
+				</div>
+			</div>
+			<div class="card-footer">
+				<button type="submit" class="btn btn-info"><i class="fas fa-update"></i> {{ action == 'edit' ? 'Update' : 'Add' }}</button>
+				<button type="button" onclick="window.location = '{{ constant('ADMIN_URL') }}?p=news';" class="btn btn-danger float-right"><i class="fas fa-cancel"></i> Cancel</button>
+			</div>
+		</form>
+
+	</div>
+
+	{% if action != 'edit' %}
+		<script type="text/javascript">
+			$(document).ready(function () {
+				$("#news-edit").hide();
+
+				$("#news-button").click(function () {
+					$("#news-edit").toggle();
+					return false;
+				});
+
+				$('#select-type').change(function () {
+					var value = $('#select-type').val();
+					if (value === {{ constant('ARTICLE') }}) {
+						$('#article-text').show();
+						$('#article-image').show();
+					} else {
+						$('#article-text').hide();
+						$('#article-image').hide();
+					}
+				});
+			});
+		</script>
+	{% endif %}
+
+	{{ include('tinymce.html.twig') }}
+	<script type="text/javascript">
+		tinymceInit();
+	</script>
+{% endif %}

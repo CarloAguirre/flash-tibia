@@ -1,0 +1,24 @@
+{% set title = 'Pass leadership' %}
+{% set background = config('darkborder') %}
+{% set content %}
+<table style="width:100%;">
+	<tr>
+		<td><strong>Pass leadership to: </strong><br>
+			<form action="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=pass_leadership" method="post">
+				{{ csrf() }}
+				<input type="hidden" name="todo" value="save"/>
+				<input type="text" size="40" name="player"/>
+				<input type="submit" value="Save">
+			</form>
+		</td>
+	</tr>
+</table>
+{% endset %}
+{% include 'tables.headline.html.twig' %}
+<br/>
+<div style="text-align:center">
+	<form action="{{ getLink('guilds') }}?guild={{ guild.getName() }}&action=manager" method="post">
+		{{ csrf() }}
+		{{ include('buttons.back.html.twig') }}
+	</form>
+</div>

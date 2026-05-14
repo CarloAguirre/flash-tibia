@@ -1,0 +1,23 @@
+<br/>
+<form action="{{ getLink('characters') }}" method="post">
+	{% set title = 'Search Character' %}
+	{% set tableClass = 'Table1' %}
+	{% set background = config('darkborder') %}
+	{% set content %}
+		<table width="100%">
+			<tr>
+				<td style="vertical-align:middle" class="LabelV150">
+					Character Name:
+				</td>
+				<td style="width:170px">
+					<input style="width:165px" name="name" value="" size="29" maxlength="29"/>
+				</td>
+				<td>
+					{% set button_name = 'Submit' %}
+					{{ include('buttons.base.html.twig') }}
+				</td>
+			</tr>
+		</table>
+	{% endset %}
+	{{ include('tables.headline.html.twig') }}
+</form>

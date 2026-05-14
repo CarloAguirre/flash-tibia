@@ -1,0 +1,9 @@
+Module
+  name: game_ai_copilot
+  description: Eldera Copilot minimal in-game assistant panel
+  author: Eldera
+  sandboxed: true
+  dependencies: [ game_interface, game_mainpanel, game_minimap ]
+  scripts: [ ai_copilot ]
+  @onLoad: init()
+  @onUnload: terminate()

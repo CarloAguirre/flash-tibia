@@ -81,6 +81,7 @@ protected:
     int internalLoadMouseCursor(const ImagePtr& image, const Point& hotSpot) override;
 private:
     bool m_running;
+    bool m_firstFrameReported = false;
     Timer m_clickTimer;
     bool m_usingTouch = false;
     double m_canvasLogicalScale = 1.0;

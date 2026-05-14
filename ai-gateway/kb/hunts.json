@@ -1,0 +1,52 @@
+{
+  "version": "eldera-kb-phase2-v1",
+  "hunts": [
+    {
+      "id": "hunt.dawnport_beginner",
+      "name": "Dawnport beginner loop",
+      "area": "Dawnport",
+      "levelRange": { "min": 2, "max": 8 },
+      "creatures": ["troll", "minotaur", "rotworm", "rat", "salamander", "dawnfly"],
+      "summary": "Use Dawnport for very early progression. The repo data describes several beginner creature families there, with extra caution around minotaur and rotworm caves.",
+      "keywords": ["dawnport", "hunt", "hunting", "level", "levelear", "cazar", "beginner", "troll", "minotaur", "rotworm", "rat", "salamander", "dawnfly"],
+      "notes": ["Keep supplies conservative while learning the area.", "Treat minotaurs and groups of rotworms as higher risk for new characters."],
+      "source": ["canary-main/data-otservbr-global/startup/tables/writeable.lua"]
+    },
+    {
+      "id": "hunt.rookgaard_sewers",
+      "name": "Rookgaard sewers",
+      "area": "Rookgaard",
+      "levelRange": { "min": 2, "max": 6 },
+      "creatures": ["rat"],
+      "summary": "Al Dee's dialogue identifies the Rookgaard sewers as overrun by rats, making them a cautious first hunting topic for new rook characters.",
+      "keywords": ["rookgaard", "sewer", "sewers", "rat", "rats", "hunt", "hunting", "level", "levelear", "cazar", "low level"],
+      "notes": ["Carry food and basic equipment.", "Upgrade from sewers once rat experience slows down."],
+      "source": ["canary-main/data-otservbr-global/npc/al_dee.lua"]
+    },
+    {
+      "id": "hunt.rookgaard_troll_cave",
+      "name": "Rookgaard Troll Cave",
+      "area": "Rookgaard",
+      "levelRange": { "min": 6, "max": 12 },
+      "creatures": ["troll"],
+      "summary": "The datapack contains Troll Cave quest data and rook cave references. Bring a rope and basic supplies before going underground.",
+      "keywords": ["rookgaard", "troll", "troll cave", "hunt", "hunting", "level", "levelear", "cazar", "rope", "underground"],
+      "notes": ["Bring rope before entering cave areas.", "Avoid being surrounded while under-geared."],
+      "source": [
+        "canary-main/data-otservbr-global/startup/tables/chest.lua",
+        "canary-main/data-otservbr-global/startup/tables/tile.lua"
+      ]
+    },
+    {
+      "id": "hunt.rookgaard_rotworms",
+      "name": "Rookgaard/Dawnport rotworms",
+      "area": "Rookgaard or Dawnport underground",
+      "levelRange": { "min": 8, "max": 14 },
+      "creatures": ["rotworm", "carrion worm"],
+      "summary": "The datapack text warns that rotworms and carrion worms can be dangerous in groups, so this is a cautious next step after rats and trolls.",
+      "keywords": ["rotworm", "rotworms", "carrion worm", "hunt", "hunting", "level", "levelear", "cazar", "underground", "rookgaard", "dawnport"],
+      "notes": ["Do not overpull groups.", "Carry healing and a rope."],
+      "source": ["canary-main/data-otservbr-global/startup/tables/writeable.lua"]
+    }
+  ]
+}

@@ -191,10 +191,12 @@ void BrowserWindow::terminate() {
 
     m_visible = false;
     m_running = false;
+    m_firstFrameReported = false;
 }
 
 void BrowserWindow::internalInitGL() {
     m_canvasLogicalScale = getConfiguredCanvasLogicalScale();
+    m_firstFrameReported = false;
     m_size = getCanvasLogicalSize(m_canvasLogicalScale);
     emscripten_set_canvas_element_size("#canvas", m_size.width(), m_size.height());
 
@@ -529,6 +531,21 @@ void BrowserWindow::handleFocusCallback(int eventType, const EmscriptenFocusEven
 }
 
 void BrowserWindow::swapBuffers() {
+    if (!m_firstFrameReported) {
+        m_firstFrameReported = true;
+        MAIN_THREAD_EM_ASM({
+            try {
+                if (typeof window !== 'undefined') {
+                    if (typeof window.__otclientNotifyFirstFrame === 'function') {
+                        window.__otclientNotifyFirstFrame();
+                    } else {
+                        window.dispatchEvent(new CustomEvent('otclient-first-frame'));
+                    }
+                }
+            } catch (error) {}
+        });
+    }
+
     // emscripten_webgl_commit_frame(); // removed to improve performance (reduce CPU overhead)
 }
 

@@ -36,6 +36,8 @@ services:
     depends_on:
       canary-db:
         condition: service_healthy
+      ai-gateway:
+        condition: service_healthy
     volumes:
       - ./canary-main:/srv/canary
     expose:
@@ -54,7 +56,7 @@ services:
       MYSQL_DBNAME: otservbr-global
       MYSQL_USER: canary
       MYSQL_PASS: canary
-      SERVER_NAME: OTServBR-Global 15
+      SERVER_NAME: Eldera Online 15
       SERVER_IP: "${CANARY_PUBLIC_HOST:-localhost}"
       SERVER_PORT: "7272"
       SERVER_LOCATION: BRA
@@ -84,6 +86,27 @@ services:
       - "${CANARY_STATUS_PORT:-7271}:7271"
       - "${CANARY_GAME_PORT:-7272}:7272"
       - "${CANARY_PROXY_HEALTH_PORT:-7980}:7980"
+
+  ai-gateway:
+    image: eldera-ai-gateway
+    build: ./ai-gateway
+    container_name: eldera-ai-gateway
+    restart: unless-stopped
+    environment:
+      PORT: "8095"
+      AI_GATEWAY_MODE: "mock"
+      GEMINI_ENABLED: "false"
+      MAX_BODY_BYTES: "32768"
+      MAX_TEXT_BYTES: "240"
+    expose:
+      - "8095"
+    ports:
+      - "${AI_GATEWAY_PORT:-8095}:8095"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8095/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
   web15:
     image: tibia-web
