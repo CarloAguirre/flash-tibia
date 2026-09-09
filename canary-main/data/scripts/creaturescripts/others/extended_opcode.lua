@@ -1,5 +1,6 @@
 local OPCODE_LANGUAGE = 1
 local OPCODE_ELDERA_COPILOT = 216
+local OPCODE_FARMING = 217
 
 local aiCopilotLibPath = CORE_DIRECTORY .. "/libs/ai_copilot"
 
@@ -83,6 +84,8 @@ function extendedOpcode.onExtendedOpcode(player, opcode, buffer)
 		end
 	elseif opcode == OPCODE_ELDERA_COPILOT then
 		sendCopilotResponse(player, buffer)
+	elseif opcode == OPCODE_FARMING and Farming then
+		Farming.handleOpcode(player, buffer)
 	end
 end
 
