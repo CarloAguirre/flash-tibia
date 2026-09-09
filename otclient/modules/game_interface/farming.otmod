@@ -1,0 +1,11 @@
+Module
+  name: game_farming
+  description: Eldera resource farming and materials wallet
+  author: Eldera
+  sandboxed: true
+  autoload: true
+  autoload-priority: 1000
+  dependencies: [ game_interface ]
+  scripts: [ farming ]
+  @onLoad: init()
+  @onUnload: terminate()
