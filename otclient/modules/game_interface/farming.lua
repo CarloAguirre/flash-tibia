@@ -70,7 +70,7 @@ local function syncWallet()
     end
 end
 
-local function armFarming(useThing)
+local function armFarming(menuPosition, lookThing, useThing, creatureThing)
     if not useThing or useThing:getId() ~= PICK_ITEM_ID then
         return
     end
