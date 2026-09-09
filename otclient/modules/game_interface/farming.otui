@@ -11,7 +11,7 @@ MiniWindow
     anchors.right: miniwindowScrollBar.left
     anchors.bottom: parent.bottom
     margin-left: 6
-    margin-right: 4
+    margin-right: 8
     margin-top: 2
     padding-top: 2
 
@@ -25,8 +25,10 @@ MiniWindow
     Label
       id: woodValue
       text: 0
+      width: 48
       anchors.top: woodLabel.top
       anchors.right: parent.right
+      margin-right: 2
       color: #f0df9fff
       text-align: right
 
@@ -41,8 +43,10 @@ MiniWindow
     Label
       id: stoneValue
       text: 0
+      width: 48
       anchors.top: stoneLabel.top
       anchors.right: parent.right
+      margin-right: 2
       color: #c9d1d9ff
       text-align: right
 
