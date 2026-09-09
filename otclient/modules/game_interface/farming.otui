@@ -1,7 +1,7 @@
 MiniWindow
   id: farmingMaterialsWindow
-  !text: tr('Materials')
-  height: 92
+  !text: tr('Materials & Build')
+  height: 214
   &save: true
 
   MiniWindowContents
@@ -32,10 +32,47 @@ MiniWindow
       color: #f0df9fff
       text-align: right
 
+    Panel
+      id: woodBuildRow
+      height: 32
+      anchors.top: woodLabel.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+
+      UIItem
+        id: woodWall
+        size: 30 30
+        virtual: true
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        border-width: 1
+        border-color: #5a5a5aff
+
+      UIItem
+        id: woodDoor
+        size: 30 30
+        virtual: true
+        anchors.left: woodWall.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
+      UIItem
+        id: woodWindow
+        size: 30 30
+        virtual: true
+        anchors.left: woodDoor.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
     Label
       id: stoneLabel
       !text: tr('Stone')
-      anchors.top: woodLabel.bottom
+      anchors.top: woodBuildRow.bottom
       anchors.left: parent.left
       margin-top: 4
       color: #d7d7d7ff
@@ -50,18 +87,97 @@ MiniWindow
       color: #c9d1d9ff
       text-align: right
 
-    HorizontalSeparator
+    Panel
+      id: stoneBuildRow
+      height: 32
       anchors.top: stoneLabel.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+
+      UIItem
+        id: stoneWall
+        size: 30 30
+        virtual: true
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        border-width: 1
+        border-color: #5a5a5aff
+
+      UIItem
+        id: stoneDoor
+        size: 30 30
+        virtual: true
+        anchors.left: stoneWall.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
+      UIItem
+        id: stoneWindow
+        size: 30 30
+        virtual: true
+        anchors.left: stoneDoor.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
+    HorizontalSeparator
+      id: buildSeparator
+      anchors.top: stoneBuildRow.bottom
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 5
 
     Label
+      id: buildSelection
+      !text: tr('Select a structure')
+      anchors.top: buildSeparator.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 4
+      color: #d7d7d7ff
+      text-align: center
+
+    Label
+      id: buildQueue
+      !text: tr('Click map squares to plan')
+      anchors.top: buildSelection.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+      color: #9d9d9dff
+      text-align: center
+      font: verdana-9px
+
+    Button
+      id: confirmBuild
+      !text: tr('Build')
+      width: 52
+      height: 20
+      anchors.top: buildQueue.bottom
+      anchors.left: parent.left
+      margin-top: 4
+      enabled: false
+
+    Button
+      id: cancelBuild
+      !text: tr('Cancel')
+      width: 52
+      height: 20
+      anchors.top: confirmBuild.top
+      anchors.right: parent.right
+      enabled: false
+
+    Label
       id: farmingStatus
       !text: tr('Ready')
-      anchors.top: prev.bottom
+      anchors.top: confirmBuild.bottom
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 4
       color: #9d9d9dff
       text-align: center
+      font: verdana-9px
