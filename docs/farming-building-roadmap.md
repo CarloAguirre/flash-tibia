@@ -23,12 +23,23 @@ Implemented on `feature/farming-system`:
   - `wood`;
   - `stone`.
 - Wallet persists in `player_materials`.
-- Resource nodes share an in-memory depletion counter (`8..12` hits for the MVP) and recover after 30 seconds.
+- Resource nodes share an in-memory depletion counter (`8..12` hits for the MVP).
+- When a resource is depleted, its world item is removed for the rest of the current server session.
+- There is no timed respawn. Resources return only when Canary restarts and reloads the immutable `.otbm`, matching the daily Global Server Save + shutdown/restart cycle.
 - Materials are synchronized server -> client and displayed in a `Materials` mini-window.
 
-### Current MVP limitation
+## Resource depletion model
 
-Depletion is logical but not yet visually destructive: the world item remains visible while the node is recovering. Visual states (tree -> damaged tree -> stump; rock -> damaged rock -> rubble) will be added only after the global-map resource item IDs and safe transform pairs are catalogued. This avoids damaging quest/special map objects.
+For the current design there are no intermediate damaged sprites.
+
+The visual flow is intentionally simple:
+
+- tree/bush -> farming hits -> disappears;
+- rock/boulder -> farming hits -> disappears;
+- depleted resources remain absent until the next server restart;
+- the original resource is restored automatically when `otservbr.otbm` is loaded again.
+
+This avoids introducing artificial sprite variants that do not already exist in the client assets.
 
 ## Resource safety strategy
 
@@ -37,37 +48,23 @@ The global map contains quest and decorative objects that must not be altered ac
 - explicit resource overrides;
 - a resource blacklist;
 - conservative name-based detection for ordinary trees/bushes/rocks;
+- protection against action-bound map objects;
 - server-authoritative distance, target and tool validation.
 
 As testing identifies real item IDs around Thais and other zones, detection should move toward a curated resource catalog.
 
-## Phase 2 - Resource catalog & visual depletion
+## Phase 2 - Resource catalog
 
 - Catalogue common tree, bush, rock and ore IDs.
 - Define per-node metadata:
   - material;
   - durability;
   - reward range;
-  - hit effect;
-  - depleted item ID;
-  - respawn item ID;
-  - respawn delay.
-- Add visual transform/restore states.
+  - hit effect.
 - Exclude quest, protection-zone and special objects.
+- Keep depletion as runtime removal until the daily map reload unless a future gameplay decision explicitly changes this rule.
 
-## Phase 3 - Persistent world resources
-
-Persist dynamic resource state independently of the `.otbm`:
-
-- world position;
-- original item ID;
-- current state;
-- remaining durability;
-- depleted/respawn timestamp.
-
-This state is restored after a Canary restart.
-
-## Phase 4 - Construction MVP
+## Phase 3 - Construction MVP
 
 Use wallet materials to build a first structure (wood wall):
 
@@ -79,7 +76,9 @@ Use wallet materials to build a first structure (wood wall):
 - persist structure in DB;
 - restore it after server restart.
 
-## Phase 5 - Building system
+This is intentionally different from natural resources: player-created constructions must survive the daily map reload, while farmed natural resources reset with the `.otbm`.
+
+## Phase 4 - Building system
 
 - wood/stone walls;
 - doors and gates;
@@ -93,4 +92,4 @@ Use wallet materials to build a first structure (wood wall):
 
 ## Technical rule
 
-The `.otbm` remains the immutable base world. Player-created changes live in a dynamic database-backed world layer and are reapplied by Canary at runtime.
+The `.otbm` remains the immutable base world. Temporary natural-resource depletion lives only in the running world and resets on restart. Player-created structures live in a persistent database-backed world layer and are reapplied by Canary at runtime.
