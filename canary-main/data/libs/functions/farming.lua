@@ -8,7 +8,6 @@ Farming.REWARD_HITS_MIN = 1
 Farming.REWARD_HITS_MAX = 3
 Farming.RESOURCE_HITS_MIN = 8
 Farming.RESOURCE_HITS_MAX = 12
-Farming.RESOURCE_RESPAWN_SECONDS = 30
 
 Farming.armed = Farming.armed or {}
 Farming.sessions = Farming.sessions or {}
@@ -65,51 +64,14 @@ end
 
 local function getResourceState(key)
 	local state = Farming.resourceStates[key]
-	local now = os.time()
-
 	if not state then
 		state = {
 			remainingHits = math.random(Farming.RESOURCE_HITS_MIN, Farming.RESOURCE_HITS_MAX),
-			depletedUntil = 0,
 		}
 		Farming.resourceStates[key] = state
-	elseif state.depletedUntil > 0 and state.depletedUntil <= now then
-		state.remainingHits = math.random(Farming.RESOURCE_HITS_MIN, Farming.RESOURCE_HITS_MAX)
-		state.depletedUntil = 0
 	end
 
 	return state
-end
-
-local function respawnResource(resourceKey, itemId, x, y, z)
-	local position = Position(x, y, z)
-	local tile = Tile(position)
-
-	-- A restart reloads the original OTBM, so the resource may already exist
-	-- when this delayed event is reached in unusual reload scenarios.
-	if tile and tile:getItemById(itemId) then
-		local existingState = Farming.resourceStates[resourceKey]
-		if existingState then
-			existingState.remainingHits = math.random(Farming.RESOURCE_HITS_MIN, Farming.RESOURCE_HITS_MAX)
-			existingState.depletedUntil = 0
-		end
-		return
-	end
-
-	local restored = Game.createItem(itemId, 1, position)
-	if not restored then
-		return
-	end
-
-	local state = Farming.resourceStates[resourceKey]
-	if not state then
-		state = {}
-		Farming.resourceStates[resourceKey] = state
-	end
-	state.remainingHits = math.random(Farming.RESOURCE_HITS_MIN, Farming.RESOURCE_HITS_MAX)
-	state.depletedUntil = 0
-
-	position:sendMagicEffect(CONST_ME_POFF)
 end
 
 function Farming.classifyItem(item)
@@ -275,9 +237,8 @@ local function farmingTick(playerId, token)
 	end
 
 	local state = getResourceState(session.resourceKey)
-	if state.depletedUntil > os.time() then
+	if state.remainingHits <= 0 then
 		Farming.stop(player, "depleted")
-		player:sendCancelMessage("This resource is depleted. Try again shortly.")
 		return
 	end
 
@@ -292,25 +253,12 @@ local function farmingTick(playerId, token)
 
 	if state.remainingHits <= 0 then
 		state.remainingHits = 0
-		state.depletedUntil = os.time() + Farming.RESOURCE_RESPAWN_SECONDS
-
-		local removed = target:remove()
-		if removed then
-			addEvent(
-				respawnResource,
-				Farming.RESOURCE_RESPAWN_SECONDS * 1000,
-				session.resourceKey,
-				session.itemId,
-				session.position.x,
-				session.position.y,
-				session.position.z
-			)
-		end
+		target:remove()
 
 		Farming.stop(player, "depleted")
 		player:sendTextMessage(
 			MESSAGE_EVENT_ADVANCE,
-			string.format("The resource was depleted and will regrow in %d seconds.", Farming.RESOURCE_RESPAWN_SECONDS)
+			"The resource is depleted until the next server save."
 		)
 		return
 	end
@@ -354,8 +302,8 @@ function Farming.handlePickUse(player, item, target, toPosition)
 
 	local resourceKey = positionKey(toPosition, target:getId())
 	local state = getResourceState(resourceKey)
-	if state.depletedUntil > os.time() then
-		player:sendCancelMessage("This resource is depleted. Try again shortly.")
+	if state.remainingHits <= 0 then
+		player:sendCancelMessage("This resource is depleted until the next server save.")
 		return true, true
 	end
 
