@@ -1,0 +1,63 @@
+MiniWindow
+  id: farmingMaterialsWindow
+  !text: tr('Materials')
+  height: 92
+  &save: true
+
+  MiniWindowContents
+    id: contentsPanel
+    anchors.top: miniwindowTopBar.bottom
+    anchors.left: parent.left
+    anchors.right: miniwindowScrollBar.left
+    anchors.bottom: parent.bottom
+    margin-left: 6
+    margin-right: 4
+    margin-top: 2
+    padding-top: 2
+
+    Label
+      id: woodLabel
+      !text: tr('Wood')
+      anchors.top: parent.top
+      anchors.left: parent.left
+      color: #d7d7d7ff
+
+    Label
+      id: woodValue
+      text: 0
+      anchors.top: woodLabel.top
+      anchors.right: parent.right
+      color: #f0df9fff
+      text-align: right
+
+    Label
+      id: stoneLabel
+      !text: tr('Stone')
+      anchors.top: woodLabel.bottom
+      anchors.left: parent.left
+      margin-top: 4
+      color: #d7d7d7ff
+
+    Label
+      id: stoneValue
+      text: 0
+      anchors.top: stoneLabel.top
+      anchors.right: parent.right
+      color: #c9d1d9ff
+      text-align: right
+
+    HorizontalSeparator
+      anchors.top: stoneLabel.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 5
+
+    Label
+      id: farmingStatus
+      !text: tr('Ready')
+      anchors.top: prev.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 4
+      color: #9d9d9dff
+      text-align: center
