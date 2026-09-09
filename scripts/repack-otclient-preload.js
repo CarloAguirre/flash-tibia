@@ -9,8 +9,11 @@ const replaceAll = args.includes('--replace-all');
 const replacePrefixes = args
   .filter((arg) => arg.startsWith('--replace-prefix='))
   .map((arg) => arg.slice('--replace-prefix='.length));
+const addFiles = args
+  .filter((arg) => arg.startsWith('--add-file='))
+  .map((arg) => arg.slice('--add-file='.length));
 const targetDirs = args
-  .filter((arg) => arg !== '--replace-all' && !arg.startsWith('--replace-prefix='))
+  .filter((arg) => arg !== '--replace-all' && !arg.startsWith('--replace-prefix=') && !arg.startsWith('--add-file='))
   .map((arg) => path.resolve(repoRoot, arg));
 
 if (replacePrefixes.length === 0) {
@@ -28,8 +31,13 @@ function decodeJsString(value) {
   return JSON.parse(`"${value}"`);
 }
 
+function normalizePreloadFilename(filename) {
+  const normalized = filename.replace(/\\/g, '/');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
 function sourcePathFor(filename) {
-  return path.join(sourceRoot, filename.replace(/^\/+/, '').split('/').join(path.sep));
+  return path.join(sourceRoot, normalizePreloadFilename(filename).replace(/^\/+/, '').split('/').join(path.sep));
 }
 
 function shouldReplace(filename) {
@@ -71,8 +79,12 @@ function repack(targetDir) {
 
   let offset = 0;
   let replaced = 0;
+  let added = 0;
   const chunks = [];
+  const knownFiles = new Set();
+
   const entries = metadata.entries.map((entry) => {
+    knownFiles.add(entry.filename);
     const sourcePath = sourcePathFor(entry.filename);
     const useSource = shouldReplace(entry.filename) && fs.existsSync(sourcePath) && fs.statSync(sourcePath).isFile();
     const content = useSource ? fs.readFileSync(sourcePath) : oldData.subarray(entry.start, entry.end);
@@ -86,6 +98,25 @@ function repack(targetDir) {
     return nextEntry;
   });
 
+  for (const requestedFile of addFiles) {
+    const filename = normalizePreloadFilename(requestedFile);
+    if (knownFiles.has(filename)) {
+      continue;
+    }
+
+    const sourcePath = sourcePathFor(filename);
+    if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+      throw new Error(`Cannot add missing preload source file: ${sourcePath}`);
+    }
+
+    const content = fs.readFileSync(sourcePath);
+    entries.push({ filename, start: offset, end: offset + content.length });
+    offset += content.length;
+    chunks.push(content);
+    knownFiles.add(filename);
+    added += 1;
+  }
+
   const newData = Buffer.concat(chunks, offset);
   const packageUuid = `sha256-${crypto.createHash('sha256').update(newData).digest('hex')}`;
   const filesText = entries
@@ -96,7 +127,7 @@ function repack(targetDir) {
   fs.writeFileSync(dataPath, newData);
   fs.writeFileSync(jsPath, jsText.replace(metadata.original, newMetadata));
 
-  console.log(`${path.relative(repoRoot, targetDir)} replaced=${replaced} size=${oldData.length}->${newData.length} uuid=${packageUuid}`);
+  console.log(`${path.relative(repoRoot, targetDir)} replaced=${replaced} added=${added} size=${oldData.length}->${newData.length} uuid=${packageUuid}`);
 }
 
 for (const targetDir of targetDirs) {
