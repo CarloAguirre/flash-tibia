@@ -26,7 +26,7 @@ Implemented on `feature/farming-system`:
 - Resource nodes share an in-memory depletion counter (`8..12` hits for the MVP).
 - When a resource is depleted, its world item is removed for the rest of the current server session.
 - There is no timed respawn. Resources return only when Canary restarts and reloads the immutable `.otbm`, matching the daily Global Server Save + shutdown/restart cycle.
-- Materials are synchronized server -> client and displayed in a `Materials` mini-window.
+- Materials are synchronized server -> client and displayed in the Materials/Build mini-window.
 
 ## Resource depletion model
 
@@ -64,30 +64,49 @@ As testing identifies real item IDs around Thais and other zones, detection shou
 - Exclude quest, protection-zone and special objects.
 - Keep depletion as runtime removal until the daily map reload unless a future gameplay decision explicitly changes this rule.
 
-## Phase 3 - Construction MVP
+## Phase 3 - Construction planning vertical slice
 
-Use wallet materials to build a first structure (wood wall):
+Implemented on `feature/farming-system`:
 
-- enter build mode;
-- select a neighboring tile;
-- validate build permissions server-side;
-- spend wallet materials;
-- create blocking world item;
-- persist structure in DB;
-- restore it after server restart.
+- The Materials panel is now **Materials & Build**.
+- Wood and Stone expose compact item-sprite buttons for wall, door and window variants.
+- Structure catalogue, item IDs and material costs are server-authoritative and synchronized to the client through ExtendedOpcode `217`.
+- Selecting a structure enters a persistent build mode.
+- Left-clicking map squares queues or unqueues multiple construction positions.
+- Queued structures are represented by client-only green ghost items. They are never sent to Canary until confirmation, so they have no server collision or persistence.
+- The panel shows planned tile count, total cost and available material.
+- **Build** confirms the complete batch; **Cancel** removes all previews without spending anything.
+- Canary revalidates every selected position before accepting the batch:
+  - same floor and within seven squares of the player;
+  - real tile and ground exist;
+  - no existing player structure;
+  - no house, protection zone, floor-change, blocking tile, creature, teleport or action-bound ground.
+- A build batch can contain up to 40 tiles.
+- Material is deducted only after runtime creation and DB reservation succeed; failures roll back the created runtime items/reservations.
+- Confirmed structures persist in `player_structures` (database migration 58).
+- A startup GlobalEvent reapplies persisted structures after the immutable OTBM has loaded, so player constructions survive the daily Server Save restart.
 
-This is intentionally different from natural resources: player-created constructions must survive the daily map reload, while farmed natural resources reset with the `.otbm`.
+This is intentionally different from natural resources: player-created constructions survive the daily map reload, while farmed natural resources reset with the `.otbm`.
+
+### Current construction MVP limitations
+
+- Preview ghosts use the real item sprite tinted/marked green; exact alpha/transparency and local pathfinding behaviour must be validated in the browser build.
+- Wall/door/window orientation is not yet auto-selected from neighbouring structures.
+- Build permissions are intentionally conservative; claims, guild ownership and explicit buildable zones are not implemented yet.
+- Demolition, repair and structure HP are not implemented yet.
 
 ## Phase 4 - Building system
 
-- wood/stone walls;
-- doors and gates;
-- floors;
-- repair/demolition;
-- structure HP;
+Next iterations:
+
+- validate and curate the visual wall/door/window item variants;
+- automatic horizontal/vertical orientation and neighbour-aware wall joins;
+- click-drag / start-to-end line planning for long walls;
+- demolition and material refund rules;
+- repair and structure HP;
 - ownership / guild permissions;
-- buildable/restricted zones;
-- claims;
+- buildable/restricted zones and claims;
+- floors, gates and additional structures;
 - crafting and siege mechanics.
 
 ## Technical rule
