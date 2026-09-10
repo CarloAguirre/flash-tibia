@@ -11,10 +11,18 @@ local PLOT = {
 	flowerId = 3654,
 	flowerDetailId = 2899,
 	borders = {
-		north = { 4658 },
+		-- Exact transition stacks sampled from the reference farm.
+		north = { 4531, 4658 },
 		south = { 4533, 4656 },
 		east = { 4532, 4659 },
 		west = { 4534, 4657 },
+	},
+	corners = {
+		-- Exact corner stacks sampled from the reference farm.
+		northWest = { 4539, 4659 },
+		northEast = { 4540, 4662 },
+		southWest = { 4541, 4661 },
+		southEast = { 4542, 4660 },
 	},
 }
 
@@ -24,29 +32,8 @@ local CROP_ROWS = {
 	[32210] = true,
 }
 
-local function isCorner(x, y)
-	return (x == PLOT.from.x or x == PLOT.to.x) and (y == PLOT.from.y or y == PLOT.to.y)
-end
-
-local function borderSide(x, y)
-	-- Corner sprites are deliberately not guessed yet. We only apply the four
-	-- cardinal borders measured from the reference farm.
-	if isCorner(x, y) then
-		return nil
-	end
-	if y == PLOT.from.y then
-		return "north"
-	end
-	if y == PLOT.to.y then
-		return "south"
-	end
-	if x == PLOT.from.x then
-		return "west"
-	end
-	if x == PLOT.to.x then
-		return "east"
-	end
-	return nil
+local function isBoundary(x, y)
+	return x == PLOT.from.x or x == PLOT.to.x or y == PLOT.from.y or y == PLOT.to.y
 end
 
 local function clearTopItems(tile)
@@ -56,8 +43,8 @@ local function clearTopItems(tile)
 		return removed
 	end
 
-	-- Remove every non-ground item from this deliberately repurposed park area:
-	-- trees, bushes, statue/fountain pieces and the previous decorations.
+	-- This park is intentionally repurposed. Remove the old trees, bushes,
+	-- statue/fountain pieces and other top decorations before rebuilding it.
 	for i = #items, 1, -1 do
 		local item = items[i]
 		if item and item:remove() then
@@ -113,11 +100,11 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
-				local side = borderSide(x, y)
+				-- Every perimeter square, including the four corners, uses the same
+				-- grass ground (106) as the reference farm. The dirt shape itself is
+				-- drawn by the measured transition items layered on top.
 				local groundId
-				if side then
-					-- The reference farm uses ordinary grass (106) underneath its dirt
-					-- transition sprites, rather than a hard rectangle of dirt.
+				if isBoundary(x, y) then
 					groundId = PLOT.grassGroundId
 				else
 					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
@@ -136,21 +123,26 @@ local function applyBasePlot()
 	return changedGrounds, removedItems, missingTiles
 end
 
-local function applyMeasuredBorders()
+local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- North/south edges, excluding corners until their exact sprites are sampled.
+	-- Straight edges. Corners are excluded here and applied explicitly below.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
 	end
 
-	-- West/east edges, excluding corners for the same reason.
 	for y = PLOT.from.y + 1, PLOT.to.y - 1 do
 		created = created + addItems(Position(PLOT.from.x, y, z), PLOT.borders.west)
 		created = created + addItems(Position(PLOT.to.x, y, z), PLOT.borders.east)
 	end
+
+	-- Exact corner pieces measured from the same reference farm.
+	created = created + addItems(Position(PLOT.from.x, PLOT.from.y, z), PLOT.corners.northWest)
+	created = created + addItems(Position(PLOT.to.x, PLOT.from.y, z), PLOT.corners.northEast)
+	created = created + addItems(Position(PLOT.from.x, PLOT.to.y, z), PLOT.corners.southWest)
+	created = created + addItems(Position(PLOT.to.x, PLOT.to.y, z), PLOT.corners.southEast)
 
 	return created
 end
@@ -194,8 +186,8 @@ end
 local function decoratePlot()
 	local z = PLOT.from.z
 
-	-- Keep decorative plants one tile inside the farm so the measured border
-	-- sprites remain visually clean.
+	-- Keep decorative plants one tile inside so the measured dirt contour stays
+	-- visually clean and readable around the whole plot.
 	local flowerPositions = {
 		Position(32373, 32207, z),
 		Position(32382, 32207, z),
@@ -210,15 +202,15 @@ end
 
 local function applyPlot()
 	local changedGrounds, removedItems, missingTiles = applyBasePlot()
-	local borderItems = applyMeasuredBorders()
+	local contourItems = applyMeasuredContour()
 	local planted = plantCropRows()
 	decoratePlot()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Urban farm ready: {} grounds changed, {} old decorations removed, {} border items created, {} crops planted, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Urban farm ready: {} grounds changed, {} old decorations removed, {} contour items created, {} crops planted, {} missing tiles",
 		changedGrounds,
 		removedItems,
-		borderItems,
+		contourItems,
 		planted,
 		missingTiles
 	)
