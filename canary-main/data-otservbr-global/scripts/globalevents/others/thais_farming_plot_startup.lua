@@ -44,9 +44,15 @@ local WHEAT_CART = {
 	frontItems = { 7905 },
 }
 
--- Search a little beyond the runtime plot bounds as well. The old knight statue
--- has a larger sprite/anchor than a regular 1x1 decoration and can survive when
--- only the cart footprint is cleared.
+-- The visible knight statue is actually anchored one floor above the field.
+-- Its base was on z=7, but the statue itself is item 7951 at z=6.
+local LEGACY_UPPER_STATUE = {
+	position = Position(32375, 32211, 6),
+	itemId = 7951,
+}
+
+-- Search a little beyond the runtime plot bounds as well. This keeps the older
+-- z=7 cleanup for any remaining statue/base decoration around the field.
 local LEGACY_STATUE_AREA = {
 	from = Position(PLOT.from.x - 2, PLOT.from.y - 2, PLOT.from.z),
 	to = Position(PLOT.to.x + 2, PLOT.to.y + 2, PLOT.to.z),
@@ -99,6 +105,32 @@ end
 
 local function removeLegacyStatues()
 	local removed = 0
+
+	-- Remove the actual visible statue on the upper floor first. Matching both
+	-- position and id makes this safe and avoids deleting unrelated statues nearby.
+	local upperTile = Tile(LEGACY_UPPER_STATUE.position)
+	if upperTile then
+		local upperItems = upperTile:getItems()
+		if upperItems then
+			for i = #upperItems, 1, -1 do
+				local item = upperItems[i]
+				if item and item:getId() == LEGACY_UPPER_STATUE.itemId then
+					item:setActionId(0)
+					if item:remove() then
+						removed = removed + 1
+					else
+						logger.warning(
+							"[ThaisFarmingPlotStartup] Could not remove upper legacy statue ({}) at {},{},{}",
+							item:getId(),
+							LEGACY_UPPER_STATUE.position.x,
+							LEGACY_UPPER_STATUE.position.y,
+							LEGACY_UPPER_STATUE.position.z
+						)
+					end
+				end
+			end
+		end
+	end
 
 	for x = LEGACY_STATUE_AREA.from.x, LEGACY_STATUE_AREA.to.x do
 		for y = LEGACY_STATUE_AREA.from.y, LEGACY_STATUE_AREA.to.y do
