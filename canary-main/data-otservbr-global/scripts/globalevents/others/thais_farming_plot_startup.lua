@@ -4,26 +4,23 @@ local PLOT = {
 	-- Expanded one square to the west, east and south. North stays unchanged.
 	from = Position(32371, 32205, 7),
 	to = Position(32384, 32213, 7),
-	-- Native grass sampled from the original Thais park. The farm contour must
-	-- blend into THIS ground, not into the reference farm grass (106) and not
-	-- into whatever base terrain happens to exist after expanding over a path.
-	nativeGrassGroundId = 4515,
+	grassGroundId = 106,
 	dirtGroundId = 950,
 	cropGroundId = 952,
 	wheatRipeId = 3653,
 	borders = {
-		-- Dirt transition layer only. The 4656-4662 grass overlays are omitted so
-		-- there is a single, consistent Thais-grass transition around the field.
-		north = { 4531 },
-		south = { 4533 },
-		east = { 4532 },
-		west = { 4534 },
+		-- Exact transition stacks sampled from the reference farm.
+		north = { 4531, 4658 },
+		south = { 4533, 4656 },
+		east = { 4532, 4659 },
+		west = { 4534, 4657 },
 	},
 	corners = {
-		northWest = { 4539 },
-		northEast = { 4540 },
-		southWest = { 4541 },
-		southEast = { 4542 },
+		-- Exact corner stacks sampled from the same reference farm.
+		northWest = { 4539, 4659 },
+		northEast = { 4540, 4662 },
+		southWest = { 4541, 4661 },
+		southEast = { 4542, 4660 },
 	},
 }
 
@@ -48,8 +45,8 @@ local function clearTopItems(tile)
 		return removed
 	end
 
-	-- This area is intentionally repurposed. Remove old park decorations and
-	-- any previous runtime crop/contour items before rebuilding the farm.
+	-- This area is intentionally repurposed. Remove the old park decorations
+	-- and any previous runtime crop/contour items before rebuilding the farm.
 	for i = #items, 1, -1 do
 		local item = items[i]
 		if item and item:remove() then
@@ -100,12 +97,11 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
+				-- The perimeter uses normal grass under the measured transition sprites.
+				-- Inside, crop rows use ground 952 and the walkable aisles use ground 950.
 				local groundId
 				if isBoundary(x, y) then
-					-- The perimeter is explicitly restored to the original Thais park
-					-- grass (4515). This prevents cobblestone/path tiles from appearing
-					-- as a frame after the plot was expanded west/east/south.
-					groundId = PLOT.nativeGrassGroundId
+					groundId = PLOT.grassGroundId
 				else
 					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
 				end
@@ -127,8 +123,7 @@ local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- Only the measured dirt-edge pieces are layered over Thais native grass.
-	-- No secondary grass overlay is created.
+	-- Straight edges; corners are applied separately with their exact stacks.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
