@@ -84,6 +84,9 @@ local OUTFIT_SHADERS = { {
     name = 'Outfit - ForgeFailed',
     useFramebuffer = true,
     frag = 'shaders/fragment/forge_failed.frag'
+}, {
+    name = 'Outfit - Wheat Violet',
+    frag = 'shaders/fragment/wheat_violet.frag'
 }, }
 
 local MOUNT_SHADERS = { {
