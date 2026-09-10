@@ -8,6 +8,104 @@ local WHEAT = {
 	stageDurationMs = 2000,
 }
 
+-- One successful harvest grants exactly one thousandth (0.1%) of the
+-- requirement for the player's current character level and magic level.
+-- Fractional points are kept in the player's persistent KV store so low-level
+-- requirements that are not divisible by 1000 still remain exact over time.
+local WHEAT_PROGRESS = {
+	divisor = 1000,
+	levelRemainderKey = "farming.wheat.level-progress-remainder",
+	levelTrackerKey = "farming.wheat.level-progress-level",
+	magicRemainderKey = "farming.wheat.magic-progress-remainder",
+	magicTrackerKey = "farming.wheat.magic-progress-level",
+}
+
+local function getKvNumber(kv, key, defaultValue)
+	local value = kv:get(key)
+	if type(value) ~= "number" then
+		return defaultValue
+	end
+	return value
+end
+
+local function getOneThousandth(requirement, remainder)
+	local numerator = requirement + remainder
+	return math.floor(numerator / WHEAT_PROGRESS.divisor), numerator % WHEAT_PROGRESS.divisor
+end
+
+local function addWheatLevelProgress(player)
+	local level = player:getLevel()
+	local currentLevelExperience = Game.getExperienceForLevel(level)
+	local nextLevelExperience = Game.getExperienceForLevel(level + 1)
+	local requirement = nextLevelExperience - currentLevelExperience
+	if not requirement or requirement <= 0 then
+		return
+	end
+
+	local kv = player:kv()
+	local trackedLevel = getKvNumber(kv, WHEAT_PROGRESS.levelTrackerKey, level)
+	local remainder = 0
+	if trackedLevel == level then
+		remainder = getKvNumber(kv, WHEAT_PROGRESS.levelRemainderKey, 0)
+	end
+
+	local amount, newRemainder = getOneThousandth(requirement, remainder)
+	if amount > 0 then
+		-- No per-harvest experience message: the native progress bar simply moves.
+		player:addExperience(amount, false)
+	end
+
+	local newLevel = player:getLevel()
+	if newLevel ~= level then
+		kv:set(WHEAT_PROGRESS.levelTrackerKey, newLevel)
+		kv:set(WHEAT_PROGRESS.levelRemainderKey, 0)
+	else
+		kv:set(WHEAT_PROGRESS.levelTrackerKey, level)
+		kv:set(WHEAT_PROGRESS.levelRemainderKey, newRemainder)
+	end
+end
+
+local function addWheatMagicProgress(player)
+	local vocation = player:getVocation()
+	if not vocation then
+		return
+	end
+
+	local magicLevel = player:getBaseMagicLevel()
+	local requirement = vocation:getRequiredManaSpent(magicLevel + 1)
+	if not requirement or requirement <= 0 then
+		return
+	end
+
+	local kv = player:kv()
+	local trackedMagicLevel = getKvNumber(kv, WHEAT_PROGRESS.magicTrackerKey, magicLevel)
+	local remainder = 0
+	if trackedMagicLevel == magicLevel then
+		remainder = getKvNumber(kv, WHEAT_PROGRESS.magicRemainderKey, 0)
+	end
+
+	local amount, newRemainder = getOneThousandth(requirement, remainder)
+	if amount > 0 then
+		-- The second argument bypasses Canary's configured skill-rate multiplier,
+		-- keeping the farming reward at a real 0.1% regardless of server rates.
+		player:addManaSpent(amount, true)
+	end
+
+	local newMagicLevel = player:getBaseMagicLevel()
+	if newMagicLevel ~= magicLevel then
+		kv:set(WHEAT_PROGRESS.magicTrackerKey, newMagicLevel)
+		kv:set(WHEAT_PROGRESS.magicRemainderKey, 0)
+	else
+		kv:set(WHEAT_PROGRESS.magicTrackerKey, magicLevel)
+		kv:set(WHEAT_PROGRESS.magicRemainderKey, newRemainder)
+	end
+end
+
+local function addWheatProgress(player)
+	addWheatLevelProgress(player)
+	addWheatMagicProgress(player)
+end
+
 local function transformWheatAt(x, y, z, expectedId, nextId)
 	local tile = Tile(Position(x, y, z))
 	if not tile then
@@ -61,6 +159,9 @@ local function harvestWheat(player, target)
 	local position = target:getPosition()
 	target:transform(WHEAT.cut)
 	scheduleWheatRegrowth(position)
+
+	-- Progress is granted only after a real, successful harvest.
+	addWheatProgress(player)
 	return true
 end
 
