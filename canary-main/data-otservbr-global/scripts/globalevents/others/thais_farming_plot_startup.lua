@@ -1,8 +1,8 @@
 local thaisFarmingPlot = GlobalEvent("ThaisFarmingPlotStartup")
 
 local PLOT = {
-	-- Expanded one square to the west, east and south. North stays unchanged.
-	from = Position(32371, 32205, 7),
+	-- Expanded one additional square to the west. East, south and north stay unchanged.
+	from = Position(32370, 32205, 7),
 	to = Position(32384, 32213, 7),
 	grassGroundId = 106,
 	westGroundId = 870,
