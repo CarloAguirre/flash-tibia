@@ -44,6 +44,14 @@ local WHEAT_CART = {
 	frontItems = { 7905 },
 }
 
+-- Search a little beyond the runtime plot bounds as well. The old knight statue
+-- has a larger sprite/anchor than a regular 1x1 decoration and can survive when
+-- only the cart footprint is cleared.
+local LEGACY_STATUE_AREA = {
+	from = Position(PLOT.from.x - 2, PLOT.from.y - 2, PLOT.from.z),
+	to = Position(PLOT.to.x + 2, PLOT.to.y + 2, PLOT.to.z),
+}
+
 -- Alternating crop rows and bare dirt create walkable aisles. Every crop placed
 -- by this startup overlay is mature wheat; its cut/growing stages are handled by
 -- the scythe action after harvest.
@@ -83,6 +91,47 @@ local function clearTopItems(tile)
 		local item = items[i]
 		if item and item:remove() then
 			removed = removed + 1
+		end
+	end
+
+	return removed
+end
+
+local function removeLegacyStatues()
+	local removed = 0
+
+	for x = LEGACY_STATUE_AREA.from.x, LEGACY_STATUE_AREA.to.x do
+		for y = LEGACY_STATUE_AREA.from.y, LEGACY_STATUE_AREA.to.y do
+			local tile = Tile(Position(x, y, LEGACY_STATUE_AREA.from.z))
+			if tile then
+				local items = tile:getItems()
+				if items then
+					for i = #items, 1, -1 do
+						local item = items[i]
+						if item then
+							local itemType = ItemType(item:getId())
+							local name = itemType and itemType:getName() or ""
+							if name:lower():find("statue", 1, true) then
+								-- Drop any runtime action id before removal. This also handles
+								-- map decorations that were previously marked as immovable.
+								item:setActionId(0)
+								if item:remove() then
+									removed = removed + 1
+								else
+									logger.warning(
+										"[ThaisFarmingPlotStartup] Could not remove legacy statue '{}' ({}) at {},{},{}",
+										name,
+										item:getId(),
+										x,
+										y,
+										LEGACY_STATUE_AREA.from.z
+									)
+								end
+							end
+						end
+					end
+				end
+			end
 		end
 	end
 
@@ -237,9 +286,9 @@ end
 local function applyWheatCart()
 	local created = 0
 
-	-- Clear these three squares a second time after planting. This explicitly
-	-- removes the old statue/any stale overlay from the cart footprint before
-	-- reconstructing the sampled three-piece wheelbarrow.
+	-- Clear these three squares a second time after planting, then reconstruct the
+	-- sampled three-piece wheelbarrow. Every piece, including the decorative wheat,
+	-- receives the immovable action id; the move callback also hard-blocks moving it.
 	for _, position in ipairs({ WHEAT_CART.rear, WHEAT_CART.middle, WHEAT_CART.front }) do
 		local tile = Tile(position)
 		if tile then
@@ -256,14 +305,16 @@ end
 
 local function applyPlot()
 	local changedGrounds, removedItems, missingTiles = applyBasePlot()
+	local legacyStatuesRemoved = removeLegacyStatues()
 	local contourItems = applyMeasuredContour()
 	local planted = plantWheatRows()
 	local cartItems = applyWheatCart()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} cart items created, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} legacy statues removed, {} contour items created, {} wheat planted, {} cart items created, {} missing tiles",
 		changedGrounds,
 		removedItems,
+		legacyStatuesRemoved,
 		contourItems,
 		planted,
 		cartItems,
