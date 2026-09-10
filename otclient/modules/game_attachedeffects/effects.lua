@@ -146,16 +146,3 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     offset = { 0, 0 },
     bounce = { 20, 20, 2000 }
 })
-
--- Eldera farming: harvest-ready wheat receives a soft procedural blue-violet halo.
--- The Ki image is only a drawable carrier. The farming module binds the shader
--- after game_shaders has loaded, avoiding the raw Ki image caused by load order.
--- The aura is drawn behind the wheat and breathes very slowly to stay subtle.
-AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
-    drawOnUI = false,
-    size = { 84, 72 },
-    offset = { 26, 52 },
-    opacity = 0.36,
-    pulse = { 0, 4, 10000 },
-    fade = { 28, 42, 10000 }
-})
