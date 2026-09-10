@@ -20,12 +20,35 @@ local function isCartPosition(position)
 	return key and CART_POSITIONS[key] == true
 end
 
+local function isProtectedCartDecoration(item, fromPosition)
+	return item
+		and isCartPosition(fromPosition)
+		and item:getActionId() == IMMOVABLE_ACTION_ID
+end
+
 function wheatCartExchange.playerOnMoveItem(player, item, count, fromPosition, toPosition, fromCylinder, toCylinder)
-	if not item or not isCartPosition(toPosition) then
+	if not item then
 		return true
 	end
 
-	-- Keep the cart footprint clean: it only accepts harvested wheat.
+	-- The three wheelbarrow pieces and the wheat displayed on its rear square are
+	-- scenery. Block their movement explicitly as well as marking them immovable,
+	-- so even privileged/admin characters cannot pick the decorative wheat up.
+	if isProtectedCartDecoration(item, fromPosition) then
+		if item:getId() == WHEAT_ID then
+			player:sendCancelMessage("That wheat is part of the cart display.")
+		else
+			player:sendCancelMessage("You cannot move the wheat cart.")
+		end
+		return false
+	end
+
+	if not isCartPosition(toPosition) then
+		return true
+	end
+
+	-- Player-owned harvested wheat can be dropped on any of the three cart squares,
+	-- including directly on top of the decorative wheat on the rear square.
 	if item:getId() ~= WHEAT_ID then
 		player:sendCancelMessage("The wheat cart only accepts harvested wheat.")
 		return false
