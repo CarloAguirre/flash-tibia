@@ -5,11 +5,9 @@ Module
   sandboxed: true
   autoload: true
   autoload-priority: 1000
-  dependencies: [ game_interface, game_shaders, game_attachedeffects ]
-  scripts: [ wheat_glow, farming ]
+  dependencies: [ game_interface ]
+  scripts: [ farming ]
   @onLoad: |
     init()
-    initWheatGlow()
   @onUnload: |
-    terminateWheatGlow()
     terminate()
