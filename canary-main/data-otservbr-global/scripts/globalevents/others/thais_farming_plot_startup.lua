@@ -1,15 +1,13 @@
 local thaisFarmingPlot = GlobalEvent("ThaisFarmingPlotStartup")
 
 local PLOT = {
-	from = Position(32372, 32205, 7),
-	to = Position(32383, 32212, 7),
+	-- Expanded one square to the west, east and south. North stays unchanged.
+	from = Position(32371, 32205, 7),
+	to = Position(32384, 32213, 7),
 	grassGroundId = 106,
 	dirtGroundId = 950,
 	cropGroundId = 952,
-	wheatGreenId = 3652,
 	wheatRipeId = 3653,
-	flowerId = 3654,
-	flowerDetailId = 2899,
 	borders = {
 		-- Exact transition stacks sampled from the reference farm.
 		north = { 4531, 4658 },
@@ -18,7 +16,7 @@ local PLOT = {
 		west = { 4534, 4657 },
 	},
 	corners = {
-		-- Exact corner stacks sampled from the reference farm.
+		-- Exact corner stacks sampled from the same reference farm.
 		northWest = { 4539, 4659 },
 		northEast = { 4540, 4662 },
 		southWest = { 4541, 4661 },
@@ -26,10 +24,14 @@ local PLOT = {
 	},
 }
 
+-- Alternating crop rows and bare dirt create walkable aisles. Every crop placed
+-- by this startup overlay is mature wheat; its cut/growing stages are handled by
+-- the scythe action after harvest.
 local CROP_ROWS = {
 	[32206] = true,
 	[32208] = true,
 	[32210] = true,
+	[32212] = true,
 }
 
 local function isBoundary(x, y)
@@ -43,8 +45,8 @@ local function clearTopItems(tile)
 		return removed
 	end
 
-	-- This park is intentionally repurposed. Remove the old trees, bushes,
-	-- statue/fountain pieces and other top decorations before rebuilding it.
+	-- This area is intentionally repurposed. Remove the old park decorations
+	-- and any previous runtime crop/contour items before rebuilding the farm.
 	for i = #items, 1, -1 do
 		local item = items[i]
 		if item and item:remove() then
@@ -81,11 +83,6 @@ local function addItems(position, itemIds)
 	return created
 end
 
-local function addFlowerPatch(position)
-	createItem(position, PLOT.flowerId)
-	createItem(position, PLOT.flowerDetailId)
-end
-
 local function applyBasePlot()
 	local changedGrounds = 0
 	local removedItems = 0
@@ -100,9 +97,8 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
-				-- Every perimeter square, including the four corners, uses the same
-				-- grass ground (106) as the reference farm. The dirt shape itself is
-				-- drawn by the measured transition items layered on top.
+				-- The perimeter uses normal grass under the measured transition sprites.
+				-- Inside, crop rows use ground 952 and the walkable aisles use ground 950.
 				local groundId
 				if isBoundary(x, y) then
 					groundId = PLOT.grassGroundId
@@ -127,7 +123,7 @@ local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- Straight edges. Corners are excluded here and applied explicitly below.
+	-- Straight edges; corners are applied separately with their exact stacks.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
@@ -138,7 +134,6 @@ local function applyMeasuredContour()
 		created = created + addItems(Position(PLOT.to.x, y, z), PLOT.borders.east)
 	end
 
-	-- Exact corner pieces measured from the same reference farm.
 	created = created + addItems(Position(PLOT.from.x, PLOT.from.y, z), PLOT.corners.northWest)
 	created = created + addItems(Position(PLOT.to.x, PLOT.from.y, z), PLOT.corners.northEast)
 	created = created + addItems(Position(PLOT.from.x, PLOT.to.y, z), PLOT.corners.southWest)
@@ -147,34 +142,15 @@ local function applyMeasuredContour()
 	return created
 end
 
-local function plantCropRows()
+local function plantWheatRows()
 	local planted = 0
 	local z = PLOT.from.z
 
-	-- Northern row: mostly young/green wheat with a few mature plants.
-	for x = 32373, 32382 do
-		local itemId = (x == 32375 or x == 32379 or x == 32382) and PLOT.wheatRipeId or PLOT.wheatGreenId
-		if createItem(Position(x, 32206, z), itemId) then
-			planted = planted + 1
-		end
-	end
-
-	-- Central row: intentionally broken in the middle to create a small access gap.
-	for x = 32373, 32382 do
-		if x ~= 32377 and x ~= 32378 then
-			local itemId = (x % 2 == 0) and PLOT.wheatGreenId or PLOT.wheatRipeId
-			if createItem(Position(x, 32208, z), itemId) then
-				planted = planted + 1
-			end
-		end
-	end
-
-	-- Southern row: more mature wheat, with two empty squares so the plot does
-	-- not look like a mechanically filled rectangle.
-	for x = 32373, 32382 do
-		if x ~= 32375 and x ~= 32380 then
-			local itemId = (x == 32373 or x == 32378) and PLOT.wheatGreenId or PLOT.wheatRipeId
-			if createItem(Position(x, 32210, z), itemId) then
+	-- Start every field square fully grown. Harvesting with the scythe changes
+	-- 3653 -> 3651 for 2 s -> 3652 for 2 s -> 3653 again.
+	for y in pairs(CROP_ROWS) do
+		for x = PLOT.from.x + 1, PLOT.to.x - 1 do
+			if createItem(Position(x, y, z), PLOT.wheatRipeId) then
 				planted = planted + 1
 			end
 		end
@@ -183,31 +159,13 @@ local function plantCropRows()
 	return planted
 end
 
-local function decoratePlot()
-	local z = PLOT.from.z
-
-	-- Keep decorative plants one tile inside so the measured dirt contour stays
-	-- visually clean and readable around the whole plot.
-	local flowerPositions = {
-		Position(32373, 32207, z),
-		Position(32382, 32207, z),
-		Position(32373, 32211, z),
-		Position(32382, 32211, z),
-	}
-
-	for _, position in ipairs(flowerPositions) do
-		addFlowerPatch(position)
-	end
-end
-
 local function applyPlot()
 	local changedGrounds, removedItems, missingTiles = applyBasePlot()
 	local contourItems = applyMeasuredContour()
-	local planted = plantCropRows()
-	decoratePlot()
+	local planted = plantWheatRows()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Urban farm ready: {} grounds changed, {} old decorations removed, {} contour items created, {} crops planted, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
 		changedGrounds,
 		removedItems,
 		contourItems,
@@ -218,7 +176,7 @@ end
 
 function thaisFarmingPlot.onStartup()
 	-- The OTBM remains the immutable base. Every restart rebuilds this small
-	-- urban farming overlay after the world has loaded.
+	-- farming overlay after the world has loaded.
 	applyPlot()
 	return true
 end
