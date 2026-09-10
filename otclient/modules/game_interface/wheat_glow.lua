@@ -1,4 +1,5 @@
 local WHEAT_GLOW_EFFECT_ID = 12
+local WHEAT_GLOW_SHADER = 'Outfit - Wheat Violet'
 local WHEAT_CUT_ID = 3651
 local WHEAT_GROWING_ID = 3652
 local WHEAT_RIPE_ID = 3653
@@ -59,7 +60,12 @@ local function refreshWheatGlow()
 
         if itemId == WHEAT_RIPE_ID then
             if not currentGlow then
-                wheat:attachEffect(effectTemplate:clone())
+                local glow = effectTemplate:clone()
+                -- Apply the shader only now, after game_shaders is guaranteed to be loaded.
+                -- Registering it earlier in game_attachedeffects left the effect with a null
+                -- shader and therefore rendered the original Ki carrier image unchanged.
+                glow:setShader(WHEAT_GLOW_SHADER)
+                wheat:attachEffect(glow)
             end
         elseif currentGlow then
             -- Cut (3651) and growing (3652) wheat deliberately have no aura.
