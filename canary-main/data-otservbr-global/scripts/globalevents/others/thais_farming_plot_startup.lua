@@ -32,6 +32,18 @@ local PLOT = {
 	},
 }
 
+-- Three-square wheelbarrow, oriented exactly like the sampled cart:
+-- rear (north) = decorative harvested wheat + 7904, middle = 7903, front = 7905.
+-- It is centered on the farm at x=32377, with the middle piece on y=32209.
+local WHEAT_CART = {
+	rear = Position(32377, 32208, 7),
+	middle = Position(32377, 32209, 7),
+	front = Position(32377, 32210, 7),
+	rearItems = { 3605, 7904 },
+	middleItems = { 7903 },
+	frontItems = { 7905 },
+}
+
 -- Alternating crop rows and bare dirt create walkable aisles. Every crop placed
 -- by this startup overlay is mature wheat; its cut/growing stages are handled by
 -- the scythe action after harvest.
@@ -41,6 +53,17 @@ local CROP_ROWS = {
 	[32210] = true,
 	[32212] = true,
 }
+
+local function positionsEqual(first, second)
+	return first.x == second.x and first.y == second.y and first.z == second.z
+end
+
+local function isCartPosition(x, y, z)
+	local position = Position(x, y, z)
+	return positionsEqual(position, WHEAT_CART.rear)
+		or positionsEqual(position, WHEAT_CART.middle)
+		or positionsEqual(position, WHEAT_CART.front)
+end
 
 local function isBoundary(x, y)
 	return x == PLOT.from.x or x == PLOT.to.x or y == PLOT.from.y or y == PLOT.to.y
@@ -53,8 +76,9 @@ local function clearTopItems(tile)
 		return removed
 	end
 
-	-- This area is intentionally repurposed. Remove the old park decorations
-	-- and any previous runtime crop/contour items before rebuilding the farm.
+	-- This area is intentionally repurposed. Remove the old park decorations,
+	-- including the legacy statue, and any previous runtime crop/contour items
+	-- before rebuilding the farm.
 	for i = #items, 1, -1 do
 		local item = items[i]
 		if item and item:remove() then
@@ -81,10 +105,30 @@ local function createItem(position, itemId)
 	return Game.createItem(itemId, 1, position) ~= nil
 end
 
+local function createImmovableItem(position, itemId)
+	local item = Game.createItem(itemId, 1, position)
+	if not item then
+		return false
+	end
+
+	item:setActionId(IMMOVABLE_ACTION_ID)
+	return true
+end
+
 local function addItems(position, itemIds)
 	local created = 0
 	for _, itemId in ipairs(itemIds) do
 		if createItem(position, itemId) then
+			created = created + 1
+		end
+	end
+	return created
+end
+
+local function addImmovableItems(position, itemIds)
+	local created = 0
+	for _, itemId in ipairs(itemIds) do
+		if createImmovableItem(position, itemId) then
 			created = created + 1
 		end
 	end
@@ -177,10 +221,11 @@ local function plantWheatRows()
 	local z = PLOT.from.z
 
 	-- Start every field square fully grown. Harvesting with the scythe changes
-	-- 3653 -> 3651 for 2 s -> 3652 for 2 s -> 3653 again.
+	-- 3653 -> 3651 for 2 s -> 3652 for 2 s -> 3653 again. The three cart squares
+	-- stay clear so the wheelbarrow reads as a single object through the field.
 	for y in pairs(CROP_ROWS) do
 		for x = PLOT.from.x + 1, PLOT.to.x - 1 do
-			if createItem(Position(x, y, z), PLOT.wheatRipeId) then
+			if not isCartPosition(x, y, z) and createItem(Position(x, y, z), PLOT.wheatRipeId) then
 				planted = planted + 1
 			end
 		end
@@ -189,17 +234,39 @@ local function plantWheatRows()
 	return planted
 end
 
+local function applyWheatCart()
+	local created = 0
+
+	-- Clear these three squares a second time after planting. This explicitly
+	-- removes the old statue/any stale overlay from the cart footprint before
+	-- reconstructing the sampled three-piece wheelbarrow.
+	for _, position in ipairs({ WHEAT_CART.rear, WHEAT_CART.middle, WHEAT_CART.front }) do
+		local tile = Tile(position)
+		if tile then
+			clearTopItems(tile)
+		end
+	end
+
+	created = created + addImmovableItems(WHEAT_CART.rear, WHEAT_CART.rearItems)
+	created = created + addImmovableItems(WHEAT_CART.middle, WHEAT_CART.middleItems)
+	created = created + addImmovableItems(WHEAT_CART.front, WHEAT_CART.frontItems)
+
+	return created
+end
+
 local function applyPlot()
 	local changedGrounds, removedItems, missingTiles = applyBasePlot()
 	local contourItems = applyMeasuredContour()
 	local planted = plantWheatRows()
+	local cartItems = applyWheatCart()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} cart items created, {} missing tiles",
 		changedGrounds,
 		removedItems,
 		contourItems,
 		planted,
+		cartItems,
 		missingTiles
 	)
 end
