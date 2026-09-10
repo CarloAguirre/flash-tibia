@@ -5,6 +5,7 @@ local PLOT = {
 	from = Position(32371, 32205, 7),
 	to = Position(32384, 32213, 7),
 	grassGroundId = 106,
+	westGroundId = 870,
 	southGroundId = 870,
 	dirtGroundId = 950,
 	cropGroundId = 952,
@@ -15,7 +16,8 @@ local PLOT = {
 		-- The full southern row uses the sampled tile: ground 870 + item 4656.
 		south = { 4656 },
 		east = { 4532, 4659 },
-		west = { 4534, 4657 },
+		-- West edge sampled directly from Thais/reference terrain: ground 870 + item 4657.
+		west = { 4657 },
 	},
 	corners = {
 		-- Northern corners keep their exact sampled stacks. The southern row is
@@ -102,6 +104,10 @@ local function applyBasePlot()
 				if y == PLOT.to.y then
 					-- Exact southern reference tile: ground 870 + item 4656.
 					groundId = PLOT.southGroundId
+				elseif x == PLOT.from.x and y ~= PLOT.from.y then
+					-- Exact western reference tile: ground 870 + item 4657.
+					-- The NW corner remains the separately sampled corner composition.
+					groundId = PLOT.westGroundId
 				elseif isBoundary(x, y) then
 					groundId = PLOT.grassGroundId
 				else
@@ -136,8 +142,8 @@ local function applyMeasuredContour()
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
 	end
 
-	-- West/east edges stop before the south row so they cannot add their own
-	-- side/corner pieces over the uniform southern tile.
+	-- West uses its sampled tile (ground 870 + 4657). East keeps the previous
+	-- measured composition. Both stop before the south row, whose tile wins at SW/SE.
 	for y = PLOT.from.y + 1, PLOT.to.y - 1 do
 		created = created + addItems(Position(PLOT.from.x, y, z), PLOT.borders.west)
 		created = created + addItems(Position(PLOT.to.x, y, z), PLOT.borders.east)
