@@ -5,6 +5,7 @@ local PLOT = {
 	from = Position(32370, 32205, 7),
 	to = Position(32384, 32213, 7),
 	grassGroundId = 106,
+	northGroundId = 103,
 	westGroundId = 870,
 	southGroundId = 870,
 	eastGroundId = 103,
@@ -13,8 +14,8 @@ local PLOT = {
 	cropGroundId = 952,
 	wheatRipeId = 3653,
 	borders = {
-		-- Exact transition stacks sampled in-game.
-		north = { 4531, 4658 },
+		-- North excluding corners: ground 103 + item 4531.
+		north = { 4531 },
 		-- South keeps ground 870 + item 4656, except for its measured corners.
 		south = { 4656 },
 		-- East (excluding corners): ground 103 + item 4532.
@@ -108,23 +109,28 @@ local function applyBasePlot()
 				if x == PLOT.from.x and y == PLOT.from.y then
 					-- NW: ground 870 + item 4532.
 					groundId = PLOT.cornerGroundId
+				elseif x == PLOT.to.x and y == PLOT.from.y then
+					-- NE remains the previously sampled corner composition on ground 106.
+					groundId = PLOT.grassGroundId
 				elseif x == PLOT.from.x and y == PLOT.to.y then
 					-- SW: ground 870 + item 4661.
 					groundId = PLOT.cornerGroundId
 				elseif x == PLOT.to.x and y == PLOT.to.y then
 					-- SE: ground 870 + item 4660.
 					groundId = PLOT.cornerGroundId
+				elseif y == PLOT.from.y then
+					-- North excluding corners: ground 103 + item 4531.
+					groundId = PLOT.northGroundId
 				elseif y == PLOT.to.y then
 					-- South excluding corners: ground 870 + item 4656.
 					groundId = PLOT.southGroundId
 				elseif x == PLOT.from.x then
 					-- West excluding corners: ground 870 + item 4657.
 					groundId = PLOT.westGroundId
-				elseif x == PLOT.to.x and y ~= PLOT.from.y then
-					-- East excluding NE/SE corners: ground 103 + item 4532.
+				elseif x == PLOT.to.x then
+					-- East excluding corners: ground 103 + item 4532.
 					groundId = PLOT.eastGroundId
 				elseif isBoundary(x, y) then
-					-- North edge and the unchanged NE corner retain ground 106.
 					groundId = PLOT.grassGroundId
 				else
 					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
