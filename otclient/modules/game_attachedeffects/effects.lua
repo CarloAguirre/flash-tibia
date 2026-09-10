@@ -3,7 +3,7 @@
     config = {
         speed, disableWalkAnimation, shader, drawOnUI, opacity
         duration, loop, transform, hideOwner, followOwner, size{width, height}
-        offset{x, y, onTop}, dirOffset[dir]{x, y, onTop},
+        offset{x, y, onTop}, dirOffset[dir]{x, y,onTop},
         light { color, intensity}, drawOrder(only for tiles),
         bounce{minHeight, height, speed},
         pulse{minHeight, height, speed},
@@ -39,7 +39,7 @@ AttachedEffectManager.register(2, 'Bat Wings', 307, ThingCategoryCreature, {
         owner:setBounce(0, 10, 5000)
     end,
     onDetach = function(effect, oldOwner)
-        owner:setBounce(0, 0)
+        oldOwner:setBounce(0, 0)
     end
 })
 
