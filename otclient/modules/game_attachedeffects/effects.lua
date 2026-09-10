@@ -148,14 +148,15 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
 })
 
 -- Eldera farming: harvest-ready wheat receives a soft blue-violet aura.
--- Compared with the previous iteration it is smaller, shifted exactly one tile
--- north from its centered position, and breathes over eight seconds.
+-- AttachedEffect rendering subtracts the configured offset from the draw point,
+-- so positive Y moves the texture north/up on screen. With an 84x72 aura over
+-- a 32x32 tile, {26, 20} centers it on the wheat instead of spilling south.
 -- Only ripe wheat (3653) in the custom Thais plot receives this effect.
 AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
     drawOnUI = false,
     shader = 'Outfit - Wheat Violet',
     size = { 84, 72 },
-    offset = { 26, -12, true },
+    offset = { 26, 20, true },
     opacity = 0.42,
     pulse = { 0, 8, 8000 },
     fade = { 34, 58, 8000 }
