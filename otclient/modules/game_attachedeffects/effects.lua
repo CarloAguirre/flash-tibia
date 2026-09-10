@@ -147,15 +147,15 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     bounce = { 20, 20, 2000 }
 })
 
--- Eldera farming: harvest-ready wheat receives a clearly visible but soft aura.
--- The Ki texture is enlarged enough to wrap the wheat sprite, while both scale
--- and opacity breathe slowly so a full crop row reads as special without flicker.
+-- Eldera farming: harvest-ready wheat receives a broad, slow-breathing aura.
+-- This version is intentionally much larger than the previous one and uses a
+-- five-second pulse so a full wheat row reads as special without looking noisy.
 -- The farming module attaches it only to ripe wheat (3653) in the custom Thais plot.
 AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
     drawOnUI = false,
-    size = { 72, 60 },
-    offset = { 18, 16, true },
+    size = { 104, 88 },
+    offset = { 36, 28, true },
     opacity = 0.45,
-    pulse = { 0, 10, 3000 },
-    fade = { 30, 60, 3000 }
+    pulse = { 0, 14, 5000 },
+    fade = { 30, 60, 5000 }
 })
