@@ -147,13 +147,16 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     bounce = { 20, 20, 2000 }
 })
 
--- Eldera farming: a deliberately subtle visual cue for harvest-ready wheat.
--- It reuses the client's native Angel Light effect and adds a slow size/opacity
--- pulse. The farming module attaches it only to ripe wheat (3653) in the Thais
--- farming plot, so normal wheat elsewhere in Tibia is untouched.
-AttachedEffectManager.register(12, 'Ripe Wheat Glow', 50, ThingCategoryEffect, {
+-- Eldera farming: harvest-ready wheat receives a small but clearly visible aura.
+-- The previous Angel Light sprite was too subtle against a dense yellow wheat row,
+-- so this uses the client's existing Ki aura texture, scaled down to one tile and
+-- kept translucent. The farming module attaches it only to ripe wheat (3653) in
+-- the custom Thais plot; cut/growing wheat and normal wheat elsewhere are untouched.
+AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
     drawOnUI = false,
-    offset = { 0, -4, true },
-    pulse = { 0, 10, 1800 },
-    fade = { 22, 45, 1800 }
+    size = { 56, 48 },
+    offset = { 12, 10, true },
+    opacity = 0.45,
+    pulse = { 0, 8, 1800 },
+    fade = { 30, 60, 1800 }
 })
