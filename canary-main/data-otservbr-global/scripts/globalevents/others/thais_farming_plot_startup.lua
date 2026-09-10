@@ -5,22 +5,23 @@ local PLOT = {
 	from = Position(32371, 32205, 7),
 	to = Position(32384, 32213, 7),
 	grassGroundId = 106,
+	southGroundId = 870,
 	dirtGroundId = 950,
 	cropGroundId = 952,
 	wheatRipeId = 3653,
 	borders = {
 		-- Exact transition stacks sampled from the reference farm.
 		north = { 4531, 4658 },
-		south = { 4533, 4656 },
+		-- The full southern row uses the sampled tile: ground 870 + item 4656.
+		south = { 4656 },
 		east = { 4532, 4659 },
 		west = { 4534, 4657 },
 	},
 	corners = {
-		-- Exact corner stacks sampled from the same reference farm.
+		-- Northern corners keep their exact sampled stacks. The southern row is
+		-- intentionally uniform, including both corner squares.
 		northWest = { 4539, 4659 },
 		northEast = { 4540, 4662 },
-		southWest = { 4541, 4661 },
-		southEast = { 4542, 4660 },
 	},
 }
 
@@ -97,10 +98,11 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
-				-- The perimeter uses normal grass under the measured transition sprites.
-				-- Inside, crop rows use ground 952 and the walkable aisles use ground 950.
 				local groundId
-				if isBoundary(x, y) then
+				if y == PLOT.to.y then
+					-- Exact southern reference tile: ground 870 + item 4656.
+					groundId = PLOT.southGroundId
+				elseif isBoundary(x, y) then
 					groundId = PLOT.grassGroundId
 				else
 					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
@@ -123,12 +125,19 @@ local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- Straight edges; corners are applied separately with their exact stacks.
+	-- North edge excluding its measured corners.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
+	end
+
+	-- The entire south row, including both corner squares, is deliberately the
+	-- same sampled tile: ground 870 with item 4656 on top.
+	for x = PLOT.from.x, PLOT.to.x do
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
 	end
 
+	-- West/east edges stop before the south row so they cannot add their own
+	-- side/corner pieces over the uniform southern tile.
 	for y = PLOT.from.y + 1, PLOT.to.y - 1 do
 		created = created + addItems(Position(PLOT.from.x, y, z), PLOT.borders.west)
 		created = created + addItems(Position(PLOT.to.x, y, z), PLOT.borders.east)
@@ -136,8 +145,6 @@ local function applyMeasuredContour()
 
 	created = created + addItems(Position(PLOT.from.x, PLOT.from.y, z), PLOT.corners.northWest)
 	created = created + addItems(Position(PLOT.to.x, PLOT.from.y, z), PLOT.corners.northEast)
-	created = created + addItems(Position(PLOT.from.x, PLOT.to.y, z), PLOT.corners.southWest)
-	created = created + addItems(Position(PLOT.to.x, PLOT.to.y, z), PLOT.corners.southEast)
 
 	return created
 end
