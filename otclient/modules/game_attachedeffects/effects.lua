@@ -146,3 +146,14 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     offset = { 0, 0 },
     bounce = { 20, 20, 2000 }
 })
+
+-- Eldera farming: a deliberately subtle visual cue for harvest-ready wheat.
+-- It reuses the client's native Angel Light effect and adds a slow size/opacity
+-- pulse. The farming module attaches it only to ripe wheat (3653) in the Thais
+-- farming plot, so normal wheat elsewhere in Tibia is untouched.
+AttachedEffectManager.register(12, 'Ripe Wheat Glow', 50, ThingCategoryEffect, {
+    drawOnUI = false,
+    offset = { 0, -4, true },
+    pulse = { 0, 10, 1800 },
+    fade = { 22, 45, 1800 }
+})
