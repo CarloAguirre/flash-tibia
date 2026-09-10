@@ -147,15 +147,16 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     bounce = { 20, 20, 2000 }
 })
 
--- Eldera farming: harvest-ready wheat receives a broad, slow-breathing aura.
--- This version is intentionally much larger than the previous one and uses a
--- five-second pulse so a full wheat row reads as special without looking noisy.
--- The farming module attaches it only to ripe wheat (3653) in the custom Thais plot.
+-- Eldera farming: harvest-ready wheat receives a soft blue-violet aura.
+-- Compared with the previous iteration it is smaller, shifted exactly one tile
+-- north from its centered position, and breathes over eight seconds.
+-- Only ripe wheat (3653) in the custom Thais plot receives this effect.
 AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
     drawOnUI = false,
-    size = { 104, 88 },
-    offset = { 36, 28, true },
-    opacity = 0.45,
-    pulse = { 0, 14, 5000 },
-    fade = { 30, 60, 5000 }
+    shader = 'Outfit - Wheat Violet',
+    size = { 84, 72 },
+    offset = { 26, -12, true },
+    opacity = 0.42,
+    pulse = { 0, 8, 8000 },
+    fade = { 34, 58, 8000 }
 })
