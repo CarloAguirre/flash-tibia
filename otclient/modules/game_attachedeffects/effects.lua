@@ -147,16 +147,15 @@ AttachedEffectManager.register(11, 'Bat', 307, ThingCategoryCreature, {
     bounce = { 20, 20, 2000 }
 })
 
--- Eldera farming: harvest-ready wheat receives a small but clearly visible aura.
--- The previous Angel Light sprite was too subtle against a dense yellow wheat row,
--- so this uses the client's existing Ki aura texture, scaled down to one tile and
--- kept translucent. The farming module attaches it only to ripe wheat (3653) in
--- the custom Thais plot; cut/growing wheat and normal wheat elsewhere are untouched.
+-- Eldera farming: harvest-ready wheat receives a clearly visible but soft aura.
+-- The Ki texture is enlarged enough to wrap the wheat sprite, while both scale
+-- and opacity breathe slowly so a full crop row reads as special without flicker.
+-- The farming module attaches it only to ripe wheat (3653) in the custom Thais plot.
 AttachedEffectManager.register(12, 'Ripe Wheat Glow', '/images/game/effects/ki', ThingExternalTexture, {
     drawOnUI = false,
-    size = { 56, 48 },
-    offset = { 12, 10, true },
+    size = { 72, 60 },
+    offset = { 18, 16, true },
     opacity = 0.45,
-    pulse = { 0, 8, 1800 },
-    fade = { 30, 60, 1800 }
+    pulse = { 0, 10, 3000 },
+    fade = { 30, 60, 3000 }
 })
