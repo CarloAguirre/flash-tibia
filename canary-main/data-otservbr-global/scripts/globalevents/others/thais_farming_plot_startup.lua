@@ -4,19 +4,22 @@ local PLOT = {
 	-- Expanded one square to the west, east and south. North stays unchanged.
 	from = Position(32371, 32205, 7),
 	to = Position(32384, 32213, 7),
+	-- Native grass sampled from the original Thais park. The farm contour must
+	-- blend into THIS ground, not into the reference farm grass (106) and not
+	-- into whatever base terrain happens to exist after expanding over a path.
+	nativeGrassGroundId = 4515,
 	dirtGroundId = 950,
 	cropGroundId = 952,
 	wheatRipeId = 3653,
 	borders = {
-		-- Keep only the dirt transition piece. The 4656-4662 grass overlays are
-		-- intentionally omitted so the original map ground remains visible.
+		-- Dirt transition layer only. The 4656-4662 grass overlays are omitted so
+		-- there is a single, consistent Thais-grass transition around the field.
 		north = { 4531 },
 		south = { 4533 },
 		east = { 4532 },
 		west = { 4534 },
 	},
 	corners = {
-		-- Same rule for corners: dirt transition only, no additional grass layer.
 		northWest = { 4539 },
 		northEast = { 4540 },
 		southWest = { 4541 },
@@ -45,8 +48,8 @@ local function clearTopItems(tile)
 		return removed
 	end
 
-	-- This area is intentionally repurposed. Remove the old park decorations
-	-- and any previous runtime crop/contour items before rebuilding the farm.
+	-- This area is intentionally repurposed. Remove old park decorations and
+	-- any previous runtime crop/contour items before rebuilding the farm.
 	for i = #items, 1, -1 do
 		local item = items[i]
 		if item and item:remove() then
@@ -87,7 +90,6 @@ local function applyBasePlot()
 	local changedGrounds = 0
 	local removedItems = 0
 	local missingTiles = 0
-	local preservedBoundaryGrounds = 0
 
 	for x = PLOT.from.x, PLOT.to.x do
 		for y = PLOT.from.y, PLOT.to.y do
@@ -98,32 +100,35 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
+				local groundId
 				if isBoundary(x, y) then
-					-- Do NOT transform the perimeter ground. The original OTBM floor
-					-- stays visible underneath the dirt-edge sprite.
-					preservedBoundaryGrounds = preservedBoundaryGrounds + 1
+					-- The perimeter is explicitly restored to the original Thais park
+					-- grass (4515). This prevents cobblestone/path tiles from appearing
+					-- as a frame after the plot was expanded west/east/south.
+					groundId = PLOT.nativeGrassGroundId
 				else
-					local groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
-					local ground = tile:getGround()
-					if not ground or ground:getId() ~= groundId then
-						if setGround(tile, position, groundId) then
-							changedGrounds = changedGrounds + 1
-						end
+					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
+				end
+
+				local ground = tile:getGround()
+				if not ground or ground:getId() ~= groundId then
+					if setGround(tile, position, groundId) then
+						changedGrounds = changedGrounds + 1
 					end
 				end
 			end
 		end
 	end
 
-	return changedGrounds, removedItems, missingTiles, preservedBoundaryGrounds
+	return changedGrounds, removedItems, missingTiles
 end
 
 local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- Straight edges; corners are applied separately. Only the dirt transition
-	-- sprite is created, allowing each tile's native map ground to show through.
+	-- Only the measured dirt-edge pieces are layered over Thais native grass.
+	-- No secondary grass overlay is created.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
@@ -160,14 +165,13 @@ local function plantWheatRows()
 end
 
 local function applyPlot()
-	local changedGrounds, removedItems, missingTiles, preservedBoundaryGrounds = applyBasePlot()
+	local changedGrounds, removedItems, missingTiles = applyBasePlot()
 	local contourItems = applyMeasuredContour()
 	local planted = plantWheatRows()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} perimeter grounds preserved, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
 		changedGrounds,
-		preservedBoundaryGrounds,
 		removedItems,
 		contourItems,
 		planted,
