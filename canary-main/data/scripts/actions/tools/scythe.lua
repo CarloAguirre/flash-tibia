@@ -20,6 +20,14 @@ local WHEAT_PROGRESS = {
 	magicTrackerKey = "farming.wheat.magic-progress-level",
 }
 
+-- Keep the per-harvest feedback compact because the player can harvest many
+-- tiles in quick succession. Both the visual effect and speech are sent only
+-- to the harvesting player, so nearby players are not spammed.
+local WHEAT_PROGRESS_FEEDBACK = {
+	text = "+0.1% LVL | +0.1% ML",
+	effect = CONST_ME_MAGIC_BLUE,
+}
+
 local function getKvNumber(kv, key, defaultValue)
 	local value = kv:get(key)
 	if type(value) ~= "number" then
@@ -106,6 +114,12 @@ local function addWheatProgress(player)
 	addWheatMagicProgress(player)
 end
 
+local function showWheatProgressFeedback(player)
+	local position = player:getPosition()
+	position:sendMagicEffect(WHEAT_PROGRESS_FEEDBACK.effect, player)
+	player:say(WHEAT_PROGRESS_FEEDBACK.text, TALKTYPE_MONSTER_SAY, false, player, position)
+end
+
 local function transformWheatAt(x, y, z, expectedId, nextId)
 	local tile = Tile(Position(x, y, z))
 	if not tile then
@@ -160,8 +174,9 @@ local function harvestWheat(player, target)
 	target:transform(WHEAT.cut)
 	scheduleWheatRegrowth(position)
 
-	-- Progress is granted only after a real, successful harvest.
+	-- Progress and its feedback are granted only after a real, successful harvest.
 	addWheatProgress(player)
+	showWheatProgressFeedback(player)
 	return true
 end
 
