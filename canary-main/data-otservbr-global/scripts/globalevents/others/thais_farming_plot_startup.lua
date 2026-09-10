@@ -4,23 +4,23 @@ local PLOT = {
 	-- Expanded one square to the west, east and south. North stays unchanged.
 	from = Position(32371, 32205, 7),
 	to = Position(32384, 32213, 7),
-	grassGroundId = 106,
 	dirtGroundId = 950,
 	cropGroundId = 952,
 	wheatRipeId = 3653,
 	borders = {
-		-- Exact transition stacks sampled from the reference farm.
-		north = { 4531, 4658 },
-		south = { 4533, 4656 },
-		east = { 4532, 4659 },
-		west = { 4534, 4657 },
+		-- Keep only the dirt transition piece. The 4656-4662 grass overlays are
+		-- intentionally omitted so the original map ground remains visible.
+		north = { 4531 },
+		south = { 4533 },
+		east = { 4532 },
+		west = { 4534 },
 	},
 	corners = {
-		-- Exact corner stacks sampled from the same reference farm.
-		northWest = { 4539, 4659 },
-		northEast = { 4540, 4662 },
-		southWest = { 4541, 4661 },
-		southEast = { 4542, 4660 },
+		-- Same rule for corners: dirt transition only, no additional grass layer.
+		northWest = { 4539 },
+		northEast = { 4540 },
+		southWest = { 4541 },
+		southEast = { 4542 },
 	},
 }
 
@@ -87,6 +87,7 @@ local function applyBasePlot()
 	local changedGrounds = 0
 	local removedItems = 0
 	local missingTiles = 0
+	local preservedBoundaryGrounds = 0
 
 	for x = PLOT.from.x, PLOT.to.x do
 		for y = PLOT.from.y, PLOT.to.y do
@@ -97,33 +98,32 @@ local function applyBasePlot()
 			else
 				removedItems = removedItems + clearTopItems(tile)
 
-				-- The perimeter uses normal grass under the measured transition sprites.
-				-- Inside, crop rows use ground 952 and the walkable aisles use ground 950.
-				local groundId
 				if isBoundary(x, y) then
-					groundId = PLOT.grassGroundId
+					-- Do NOT transform the perimeter ground. The original OTBM floor
+					-- stays visible underneath the dirt-edge sprite.
+					preservedBoundaryGrounds = preservedBoundaryGrounds + 1
 				else
-					groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
-				end
-
-				local ground = tile:getGround()
-				if not ground or ground:getId() ~= groundId then
-					if setGround(tile, position, groundId) then
-						changedGrounds = changedGrounds + 1
+					local groundId = CROP_ROWS[y] and PLOT.cropGroundId or PLOT.dirtGroundId
+					local ground = tile:getGround()
+					if not ground or ground:getId() ~= groundId then
+						if setGround(tile, position, groundId) then
+							changedGrounds = changedGrounds + 1
+						end
 					end
 				end
 			end
 		end
 	end
 
-	return changedGrounds, removedItems, missingTiles
+	return changedGrounds, removedItems, missingTiles, preservedBoundaryGrounds
 end
 
 local function applyMeasuredContour()
 	local created = 0
 	local z = PLOT.from.z
 
-	-- Straight edges; corners are applied separately with their exact stacks.
+	-- Straight edges; corners are applied separately. Only the dirt transition
+	-- sprite is created, allowing each tile's native map ground to show through.
 	for x = PLOT.from.x + 1, PLOT.to.x - 1 do
 		created = created + addItems(Position(x, PLOT.from.y, z), PLOT.borders.north)
 		created = created + addItems(Position(x, PLOT.to.y, z), PLOT.borders.south)
@@ -160,13 +160,14 @@ local function plantWheatRows()
 end
 
 local function applyPlot()
-	local changedGrounds, removedItems, missingTiles = applyBasePlot()
+	local changedGrounds, removedItems, missingTiles, preservedBoundaryGrounds = applyBasePlot()
 	local contourItems = applyMeasuredContour()
 	local planted = plantWheatRows()
 
 	logger.info(
-		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
+		"[ThaisFarmingPlotStartup] Wheat farm ready: {} grounds changed, {} perimeter grounds preserved, {} old items removed, {} contour items created, {} wheat planted, {} missing tiles",
 		changedGrounds,
+		preservedBoundaryGrounds,
 		removedItems,
 		contourItems,
 		planted,
