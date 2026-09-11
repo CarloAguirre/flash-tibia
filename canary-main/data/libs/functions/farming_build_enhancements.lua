@@ -190,6 +190,11 @@ function Farming.confirmBuild(player, material, structureType, rawPayload)
 		return true
 	end
 
+	if orientation == Farming.BUILD_ORIENTATION_VERTICAL and not config.rotatedItemId then
+		buildError(player, "This construction does not have a validated rotated variant.")
+		return true
+	end
+
 	for _, position in ipairs(positions) do
 		local valid, reason = validateBuildTile(player, position)
 		if not valid then
