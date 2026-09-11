@@ -244,7 +244,7 @@ function Farming.confirmBuild(player, material, structureType, rawPayload)
 
 	for index, position in ipairs(positions) do
 		Farming.structurePositions[buildPositionKey(position)] = true
-		local delay = (index - 1) * 75
+		local delay = ((index - 1) * 75) + 1
 		addEvent(constructionEffect, delay, position.x, position.y, position.z, CONST_ME_POFF)
 		addEvent(constructionEffect, delay + 140, position.x, position.y, position.z, CONST_ME_BLOCKHIT)
 	end
