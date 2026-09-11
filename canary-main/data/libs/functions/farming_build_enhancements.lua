@@ -9,13 +9,20 @@ end
 Farming.BUILD_ORIENTATION_HORIZONTAL = 0
 Farming.BUILD_ORIENTATION_VERTICAL = 1
 
--- Known curated two-direction pair. Other catalogue entries deliberately keep
--- the same item id until their alternate sprites are visually validated.
+-- Curated two-direction pairs verified against the repository item catalogue.
+-- Wall ranges contain several corner/junction sprites without explicit orientation
+-- metadata, so wall rotation stays disabled until its exact straight pair is known.
 if Farming.buildCatalog.wood and Farming.buildCatalog.wood.door then
 	Farming.buildCatalog.wood.door.rotatedItemId = 5281
 end
 if Farming.buildCatalog.stone and Farming.buildCatalog.stone.door then
 	Farming.buildCatalog.stone.door.rotatedItemId = 5281
+end
+if Farming.buildCatalog.wood and Farming.buildCatalog.wood.window then
+	Farming.buildCatalog.wood.window.rotatedItemId = 5276
+end
+if Farming.buildCatalog.stone and Farming.buildCatalog.stone.window then
+	Farming.buildCatalog.stone.window.rotatedItemId = 1471
 end
 
 local function buildPositionKey(position)
