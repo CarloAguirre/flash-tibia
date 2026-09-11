@@ -1,6 +1,7 @@
 local FARMING_OPCODE = 217
 local PICK_ITEM_ID = 3456
 local BUILD_MAX_RANGE = 7
+local BUILD_GHOST_SHADER = 'Outfit - Build Ghost'
 
 local materialsWindow = nil
 local woodValueLabel = nil
@@ -9,6 +10,7 @@ local statusLabel = nil
 local buildSelectionLabel = nil
 local buildQueueLabel = nil
 local confirmBuildButton = nil
+local rotateBuildButton = nil
 local cancelBuildButton = nil
 local rewardResetEvent = nil
 
@@ -20,6 +22,7 @@ local buildQueue = {}
 local buildQueueOrder = {}
 local buildPending = false
 local buildCursorActive = false
+local buildGhostShaderReady = false
 local mapPanel = nil
 local previousMapMouseRelease = nil
 local mapHandlerInstalled = false
@@ -59,6 +62,53 @@ local function getStructureLabel(material, structureType)
     return string.format('%s %s', materialName, structureName)
 end
 
+local function getBuildConfig()
+    if not buildMode then
+        return nil
+    end
+    return buildCatalog[buildMode.material] and buildCatalog[buildMode.material][buildMode.structureType] or nil
+end
+
+local function hasAlternateOrientation(config)
+    return config and config.rotatedItemId and config.rotatedItemId ~= config.itemId
+end
+
+local function getSelectedBuildItemId(config)
+    if not config then
+        return nil
+    end
+    if buildMode and buildMode.orientation == 1 and hasAlternateOrientation(config) then
+        return config.rotatedItemId
+    end
+    return config.itemId
+end
+
+local function getOrientationLabel()
+    if not buildMode then
+        return ''
+    end
+    return buildMode.orientation == 1 and tr('Vertical') or tr('Horizontal')
+end
+
+local function ensureBuildGhostShader()
+    if buildGhostShaderReady then
+        return true
+    end
+    if not g_shaders then
+        return false
+    end
+
+    local existing = g_shaders.getShader(BUILD_GHOST_SHADER)
+    if not existing then
+        g_shaders.createFragmentShader(BUILD_GHOST_SHADER, 'shaders/build_ghost.frag', false)
+        g_shaders.setupOutfitShader(BUILD_GHOST_SHADER)
+        existing = g_shaders.getShader(BUILD_GHOST_SHADER)
+    end
+
+    buildGhostShaderReady = existing ~= nil
+    return buildGhostShaderReady
+end
+
 local function queueCount()
     local count = 0
     for _, key in ipairs(buildQueueOrder) do
@@ -70,22 +120,20 @@ local function queueCount()
 end
 
 local function queuedCost()
-    if not buildMode then
-        return 0
-    end
-    local config = buildCatalog[buildMode.material] and buildCatalog[buildMode.material][buildMode.structureType]
+    local config = getBuildConfig()
     return config and (config.cost * queueCount()) or 0
 end
 
 local function updateBuildUi()
     local count = queueCount()
     local cost = queuedCost()
+    local config = getBuildConfig()
 
     if buildSelectionLabel then
         if buildMode then
-            local config = buildCatalog[buildMode.material] and buildCatalog[buildMode.material][buildMode.structureType]
             local unitCost = config and config.cost or 0
-            buildSelectionLabel:setText(string.format('%s  (%d)', getStructureLabel(buildMode.material, buildMode.structureType), unitCost))
+            local orientation = hasAlternateOrientation(config) and (' | ' .. getOrientationLabel()) or ''
+            buildSelectionLabel:setText(string.format('%s  (%d)%s', getStructureLabel(buildMode.material, buildMode.structureType), unitCost, orientation))
         else
             buildSelectionLabel:setText(tr('Select a structure'))
         end
@@ -105,6 +153,14 @@ local function updateBuildUi()
     if confirmBuildButton then
         local enough = buildMode and cost > 0 and cost <= (walletValues[buildMode.material] or 0)
         confirmBuildButton:setEnabled(not buildPending and enough)
+    end
+    if rotateBuildButton then
+        rotateBuildButton:setEnabled(not buildPending and buildMode ~= nil and hasAlternateOrientation(config))
+        if buildMode and hasAlternateOrientation(config) then
+            rotateBuildButton:setTooltip(string.format('%s: %s', tr('Orientation'), getOrientationLabel()))
+        else
+            rotateBuildButton:setTooltip(tr('No alternate orientation is available for this structure yet.'))
+        end
     end
     if cancelBuildButton then
         cancelBuildButton:setEnabled(buildMode ~= nil or count > 0)
@@ -134,6 +190,16 @@ local function clearBuildQueue()
     buildQueue = {}
     buildQueueOrder = {}
     updateBuildUi()
+end
+
+local function removeQueueOrderKey(targetKey)
+    local filtered = {}
+    for _, key in ipairs(buildQueueOrder) do
+        if key ~= targetKey then
+            filtered[#filtered + 1] = key
+        end
+    end
+    buildQueueOrder = filtered
 end
 
 local function enableBuildCursor()
@@ -172,28 +238,41 @@ local function cancelBuildMode(silent)
     end
 end
 
+local function createBuildPreview(position)
+    local config = getBuildConfig()
+    local itemId = getSelectedBuildItemId(config)
+    if not itemId then
+        setStatus(tr('Construction catalogue is not ready yet.'), '#ff7b72ff')
+        return nil
+    end
+
+    local preview = Item.create(itemId)
+    if not preview then
+        setStatus(tr('Could not create construction preview.'), '#ff7b72ff')
+        return nil
+    end
+
+    -- The preview exists only on this client. A dedicated fragment shader keeps
+    -- the real sprite readable while making it visibly translucent and green.
+    if ensureBuildGhostShader() then
+        preview:setShader(BUILD_GHOST_SHADER)
+    else
+        preview:setMarked('#69db7c99')
+    end
+
+    g_map.addThing(preview, position, -1)
+    return preview
+end
+
 local function addBuildPreview(position)
     if not buildMode then
         return false
     end
 
-    local config = buildCatalog[buildMode.material] and buildCatalog[buildMode.material][buildMode.structureType]
-    if not config or not config.itemId then
-        setStatus(tr('Construction catalogue is not ready yet.'), '#ff7b72ff')
-        return false
-    end
-
-    local preview = Item.create(config.itemId)
+    local preview = createBuildPreview(position)
     if not preview then
-        setStatus(tr('Could not create construction preview.'), '#ff7b72ff')
         return false
     end
-
-    -- Client-only ghost: it is never sent to Canary and therefore has no server
-    -- collision or persistence. The green translucent mark distinguishes it from
-    -- a confirmed structure.
-    preview:setMarked('#69db7c99')
-    g_map.addThing(preview, position, -1)
 
     local key = buildPositionKey(position)
     buildQueue[key] = {
@@ -202,6 +281,34 @@ local function addBuildPreview(position)
     }
     buildQueueOrder[#buildQueueOrder + 1] = key
     return true
+end
+
+local function refreshBuildPreviews()
+    for _, key in ipairs(buildQueueOrder) do
+        local entry = buildQueue[key]
+        if entry then
+            removePreview(entry)
+            entry.preview = createBuildPreview(entry.position)
+        end
+    end
+end
+
+local function rotateBuildMode()
+    if not buildMode or buildPending then
+        return
+    end
+
+    local config = getBuildConfig()
+    if not hasAlternateOrientation(config) then
+        setStatus(tr('This structure has no alternate orientation yet.'), '#ffb86cff')
+        updateBuildUi()
+        return
+    end
+
+    buildMode.orientation = buildMode.orientation == 1 and 0 or 1
+    refreshBuildPreviews()
+    setStatus(string.format('%s: %s', tr('Orientation'), getOrientationLabel()), '#7ee787ff')
+    updateBuildUi()
 end
 
 local function toggleBuildPosition(position)
@@ -225,6 +332,7 @@ local function toggleBuildPosition(position)
     if existing then
         removePreview(existing)
         buildQueue[key] = nil
+        removeQueueOrderKey(key)
         updateBuildUi()
         return
     end
@@ -235,7 +343,8 @@ local function toggleBuildPosition(position)
     end
 
     if addBuildPreview(position) then
-        setStatus(tr('Planning construction...'), '#7ee787ff')
+        local suffix = hasAlternateOrientation(getBuildConfig()) and (' | ' .. getOrientationLabel()) or ''
+        setStatus(tr('Planning construction...') .. suffix, '#7ee787ff')
     end
     updateBuildUi()
 end
@@ -246,6 +355,9 @@ local function onBuildMapMouseRelease(self, mousePosition, mouseButton)
         if position then
             toggleBuildPosition(position)
         end
+        return true
+    elseif buildMode and mouseButton == MouseRightButton then
+        rotateBuildMode()
         return true
     end
 
@@ -288,11 +400,12 @@ local function selectBuildMode(material, structureType, widget)
         clearBuildQueue()
     end
 
-    buildMode = { material = material, structureType = structureType }
+    buildMode = { material = material, structureType = structureType, orientation = 0 }
     buildPending = false
     setBuildButtonSelected(widget)
     enableBuildCursor()
-    setStatus(string.format('%s: %s', tr('Build mode'), getStructureLabel(material, structureType)), '#7ee787ff')
+    local rotationHint = hasAlternateOrientation(config) and (' | ' .. tr('Right-click or Rotate to turn')) or ''
+    setStatus(string.format('%s: %s%s', tr('Build mode'), getStructureLabel(material, structureType), rotationHint), '#7ee787ff')
     updateBuildUi()
 end
 
@@ -323,7 +436,13 @@ local function confirmBuild()
     setStatus(tr('Confirming construction...'), '#f0df9fff')
     protocol:sendExtendedOpcode(
         FARMING_OPCODE,
-        string.format('build|confirm|%s|%s|%s', buildMode.material, buildMode.structureType, table.concat(positions, ';'))
+        string.format(
+            'build|confirm|%s|%s|%d|%s',
+            buildMode.material,
+            buildMode.structureType,
+            buildMode.orientation or 0,
+            table.concat(positions, ';')
+        )
     )
 end
 
@@ -354,7 +473,8 @@ local function refreshCatalogUi(material)
         local widget = buildButtons[material .. ':' .. structureType]
         if widget and config.itemId then
             widget:setItemId(config.itemId)
-            widget:setTooltip(string.format('%s\nCost: %d %s', getStructureLabel(material, structureType), config.cost, material == 'wood' and tr('Wood') or tr('Stone')))
+            local rotationText = hasAlternateOrientation(config) and ('\n' .. tr('Rotatable')) or ''
+            widget:setTooltip(string.format('%s\nCost: %d %s%s', getStructureLabel(material, structureType), config.cost, material == 'wood' and tr('Wood') or tr('Stone'), rotationText))
         end
     end
     updateBuildUi()
@@ -377,6 +497,7 @@ local function createWindow()
     buildSelectionLabel = materialsWindow:recursiveGetChildById('buildSelection')
     buildQueueLabel = materialsWindow:recursiveGetChildById('buildQueue')
     confirmBuildButton = materialsWindow:recursiveGetChildById('confirmBuild')
+    rotateBuildButton = materialsWindow:recursiveGetChildById('rotateBuild')
     cancelBuildButton = materialsWindow:recursiveGetChildById('cancelBuild')
 
     configureBuildButton('woodWall', 'wood', 'wall')
@@ -388,6 +509,12 @@ local function createWindow()
 
     if confirmBuildButton then
         confirmBuildButton.onClick = confirmBuild
+    end
+    if rotateBuildButton then
+        rotateBuildButton.onClick = function()
+            rotateBuildMode()
+            return true
+        end
     end
     if cancelBuildButton then
         cancelBuildButton.onClick = function()
@@ -420,6 +547,7 @@ local function destroyWindow()
     buildSelectionLabel = nil
     buildQueueLabel = nil
     confirmBuildButton = nil
+    rotateBuildButton = nil
     cancelBuildButton = nil
     buildButtons = {}
 end
@@ -486,9 +614,42 @@ local function handleCatalog(parts)
         local itemId = tonumber(parts[index + 1])
         local cost = tonumber(parts[index + 2])
         if structureType and itemId and cost then
-            buildCatalog[material][structureType] = { itemId = itemId, cost = cost }
+            local previous = buildCatalog[material][structureType] or {}
+            buildCatalog[material][structureType] = {
+                itemId = itemId,
+                rotatedItemId = previous.rotatedItemId,
+                cost = cost
+            }
         end
         index = index + 3
+    end
+    refreshCatalogUi(material)
+end
+
+local function handleCatalog2(parts)
+    local material = parts[2]
+    if not buildCatalog[material] then
+        return
+    end
+
+    local index = 3
+    while index + 3 <= #parts do
+        local structureType = parts[index]
+        local itemId = tonumber(parts[index + 1])
+        local rotatedItemId = tonumber(parts[index + 2])
+        local cost = tonumber(parts[index + 3])
+        if structureType and itemId and rotatedItemId and cost then
+            buildCatalog[material][structureType] = {
+                itemId = itemId,
+                rotatedItemId = rotatedItemId,
+                cost = cost
+            }
+        end
+        index = index + 4
+    end
+
+    if buildMode and buildMode.material == material then
+        refreshBuildPreviews()
     end
     refreshCatalogUi(material)
 end
@@ -557,6 +718,8 @@ function onExtendedOpcode(protocol, opcode, buffer)
         handleWallet(parts)
     elseif messageType == 'catalog' then
         handleCatalog(parts)
+    elseif messageType == 'catalog2' then
+        handleCatalog2(parts)
     elseif messageType == 'reward' then
         handleReward(parts)
     elseif messageType == 'status' then
@@ -584,6 +747,8 @@ function onGameEnd()
 end
 
 function init()
+    ensureBuildGhostShader()
+
     connect(g_game, {
         onGameStart = onGameStart,
         onGameEnd = onGameEnd
