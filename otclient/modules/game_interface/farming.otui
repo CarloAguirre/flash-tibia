@@ -1,7 +1,7 @@
 MiniWindow
   id: farmingMaterialsWindow
   !text: tr('Materials & Build')
-  height: 214
+  height: 232
   &save: true
 
   MiniWindowContents
@@ -163,6 +163,15 @@ MiniWindow
       enabled: false
 
     Button
+      id: rotateBuild
+      !text: tr('Rotate')
+      width: 56
+      height: 20
+      anchors.top: confirmBuild.top
+      anchors.horizontalCenter: parent.horizontalCenter
+      enabled: false
+
+    Button
       id: cancelBuild
       !text: tr('Cancel')
       width: 52
@@ -172,12 +181,23 @@ MiniWindow
       enabled: false
 
     Label
-      id: farmingStatus
-      !text: tr('Ready')
+      id: buildHint
+      !text: tr('Rotate before building')
       anchors.top: confirmBuild.bottom
       anchors.left: parent.left
       anchors.right: parent.right
-      margin-top: 4
+      margin-top: 2
+      color: #737373ff
+      text-align: center
+      font: verdana-9px
+
+    Label
+      id: farmingStatus
+      !text: tr('Ready')
+      anchors.top: buildHint.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 3
       color: #9d9d9dff
       text-align: center
       font: verdana-9px
