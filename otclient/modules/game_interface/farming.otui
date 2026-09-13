@@ -1,7 +1,7 @@
 MiniWindow
   id: farmingMaterialsWindow
   !text: tr('Materials & Build')
-  height: 232
+  height: 296
   &save: true
 
   MiniWindowContents
@@ -69,10 +69,37 @@ MiniWindow
         border-width: 1
         border-color: #5a5a5aff
 
+    Panel
+      id: woodUtilityRow
+      height: 32
+      anchors.top: woodBuildRow.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      margin-top: 2
+
+      UIItem
+        id: woodStair
+        size: 30 30
+        virtual: true
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        border-width: 1
+        border-color: #5a5a5aff
+
+      UIItem
+        id: woodCatapult
+        size: 30 30
+        virtual: true
+        anchors.left: woodStair.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
     Label
       id: stoneLabel
       !text: tr('Stone')
-      anchors.top: woodBuildRow.bottom
+      anchors.top: woodUtilityRow.bottom
       anchors.left: parent.left
       margin-top: 4
       color: #d7d7d7ff
@@ -191,10 +218,20 @@ MiniWindow
       text-align: center
       font: verdana-9px
 
+    Button
+      id: catapultFire
+      !text: tr('Fire Catapult')
+      width: 116
+      height: 20
+      anchors.top: buildHint.bottom
+      anchors.horizontalCenter: parent.horizontalCenter
+      margin-top: 3
+      enabled: false
+
     Label
       id: farmingStatus
       !text: tr('Ready')
-      anchors.top: buildHint.bottom
+      anchors.top: catapultFire.bottom
       anchors.left: parent.left
       anchors.right: parent.right
       margin-top: 3
