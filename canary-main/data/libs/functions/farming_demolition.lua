@@ -28,7 +28,7 @@ end
 local function getPersistedStructure(position, itemId)
 	local query = db.storeQuery(string.format(
 		"SELECT `id`, `player_id`, `item_id`, `material`, `structure_type` FROM `player_structures` " ..
-		"WHERE `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d AND `item_id`=%d LIMIT 1",
+		"WHERE `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d AND `item_id`=%d AND `structure_type`<>'platform' LIMIT 1",
 		position.x,
 		position.y,
 		position.z,
@@ -121,8 +121,10 @@ local function completeDemolition(structureId)
 		return
 	end
 
-	-- The item is removed only after the 1.5 second dismantling window completes.
-	-- Because the DB row was revalidated above, native map objects remain protected.
+	-- The target was proven to be the persisted player structure above. Removing
+	-- it here cannot affect a native wall/door/window because native objects have
+	-- no matching player_structures row. Generated platform floors are excluded
+	-- from direct pick demolition and are removed only by support reconciliation.
 	target:remove()
 	Farming.structurePositions[buildPositionKey(job.position)] = nil
 
