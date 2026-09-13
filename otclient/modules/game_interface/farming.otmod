@@ -11,7 +11,32 @@ Module
     init()
     local siegeLoaded = pcall(dofile, 'farming_siege')
     if siegeLoaded and initSiege then
+      -- farming_siege's bootstrap configures the UI immediately and also schedules
+      -- a second configure pass 350ms later. Re-wrapping Build/Rotate/Cancel makes
+      -- the normal Build callback point to its own wrapper and recurse forever.
+      -- Suppress only that duplicate bootstrap event, then request siege status
+      -- separately after the UI has settled.
+      local originalScheduleEvent = scheduleEvent
+      local skippedSiegeBootstrap = false
+      scheduleEvent = function(callback, delay)
+        if not skippedSiegeBootstrap and delay == 350 then
+          skippedSiegeBootstrap = true
+          return nil
+        end
+        return originalScheduleEvent(callback, delay)
+      end
+
       initSiege()
+      scheduleEvent = originalScheduleEvent
+
+      originalScheduleEvent(function()
+        if g_game.isOnline() then
+          local protocol = g_game.getProtocolGame()
+          if protocol then
+            protocol:sendExtendedOpcode(217, 'siege|status')
+          end
+        end
+      end, 350)
     end
   @onUnload: |
     if terminateSiege then
