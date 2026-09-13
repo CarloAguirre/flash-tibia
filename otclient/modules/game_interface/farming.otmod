@@ -6,10 +6,15 @@ Module
   autoload: true
   autoload-priority: 1000
   dependencies: [ game_interface, game_shaders ]
-  scripts: [ farming, farming_siege ]
+  scripts: [ farming ]
   @onLoad: |
     init()
-    initSiege()
+    local siegeLoaded = pcall(dofile, 'farming_siege')
+    if siegeLoaded and initSiege then
+      initSiege()
+    end
   @onUnload: |
-    terminateSiege()
+    if terminateSiege then
+      terminateSiege()
+    end
     terminate()
