@@ -1,8 +1,24 @@
 local FARMING_OPCODE = 217
 local PICK_ITEM_ID = 3456
-local BUILD_MAX_RANGE = 7
+local BUILD_ADJACENT_RANGE = 1
 local BUILD_MAX_TILES = 40
 local BUILD_GHOST_SHADER = 'Outfit - Build Ghost'
+local BUILD_GHOST_INVALID_SHADER = 'Outfit - Build Ghost Invalid'
+local BUILD_GHOST_INVALID_CODE = [[
+uniform sampler2D u_Tex0;
+varying vec2 v_TexCoord;
+
+void main()
+{
+    vec4 source = texture2D(u_Tex0, v_TexCoord);
+    if (source.a <= 0.01)
+        discard;
+
+    vec3 ghostTint = vec3(1.0, 0.22, 0.22);
+    vec3 tinted = mix(source.rgb, ghostTint, 0.52);
+    gl_FragColor = vec4(tinted, source.a * 0.50);
+}
+]]
 
 local materialsWindow = nil
 local woodValueLabel = nil
@@ -23,9 +39,19 @@ local buildQueue = {}
 local buildQueueOrder = {}
 local buildPending = false
 local buildCursorActive = false
-local buildGhostShaderReady = false
+local pendingTotal = 0
+local pendingBuilt = 0
+local pendingFailed = 0
+
+local buildGhostShaderRequested = false
+local invalidGhostShaderRequested = false
+
 local hoverPreview = nil
-local hoverRelative = nil
+local hoverPreviewOwner = nil
+local hoverPosition = nil
+local hoverValid = false
+local lastMapPosition = nil
+
 local mapPanel = nil
 local previousMapMouseRelease = nil
 local previousMapMouseMove = nil
@@ -46,8 +72,12 @@ local function splitPayload(buffer)
     return parts
 end
 
-local function buildRelativeKey(relative)
-    return string.format('%d:%d:%d', relative.x, relative.y, relative.z or 0)
+local function buildPositionKey(position)
+    return string.format('%d:%d:%d', position.x, position.y, position.z)
+end
+
+local function copyPosition(position)
+    return { x = position.x, y = position.y, z = position.z }
 end
 
 local function setStatus(text, color)
@@ -78,40 +108,41 @@ local function hasAlternateOrientation(config)
     return config and config.rotatedItemId and config.rotatedItemId ~= config.itemId
 end
 
-local function getSelectedBuildItemId(config)
+local function getSelectedBuildItemId(config, orientation)
     if not config then
         return nil
     end
-    if buildMode and buildMode.orientation == 1 and hasAlternateOrientation(config) then
+    if orientation == 1 and hasAlternateOrientation(config) then
         return config.rotatedItemId
     end
     return config.itemId
 end
 
-local function getOrientationLabel()
-    if not buildMode then
-        return ''
-    end
-    return buildMode.orientation == 1 and tr('Vertical') or tr('Horizontal')
+local function getOrientationLabel(orientation)
+    return orientation == 1 and tr('Vertical') or tr('Horizontal')
 end
 
-local function ensureBuildGhostShader()
-    if buildGhostShaderReady then
-        return true
-    end
+local function ensureBuildGhostShaders()
     if not g_shaders then
-        return false
+        return false, false
     end
 
-    local existing = g_shaders.getShader(BUILD_GHOST_SHADER)
-    if not existing then
+    local validShader = g_shaders.getShader(BUILD_GHOST_SHADER)
+    if not validShader and not buildGhostShaderRequested then
+        buildGhostShaderRequested = true
         g_shaders.createFragmentShader(BUILD_GHOST_SHADER, 'shaders/build_ghost.frag', false)
         g_shaders.setupOutfitShader(BUILD_GHOST_SHADER)
-        existing = g_shaders.getShader(BUILD_GHOST_SHADER)
     end
 
-    buildGhostShaderReady = existing ~= nil
-    return buildGhostShaderReady
+    local invalidShader = g_shaders.getShader(BUILD_GHOST_INVALID_SHADER)
+    if not invalidShader and not invalidGhostShaderRequested then
+        invalidGhostShaderRequested = true
+        g_shaders.createFragmentShaderFromCode(BUILD_GHOST_INVALID_SHADER, BUILD_GHOST_INVALID_CODE, false)
+        g_shaders.setupOutfitShader(BUILD_GHOST_INVALID_SHADER)
+    end
+
+    return g_shaders.getShader(BUILD_GHOST_SHADER) ~= nil,
+        g_shaders.getShader(BUILD_GHOST_INVALID_SHADER) ~= nil
 end
 
 local function queueCount()
@@ -137,7 +168,7 @@ local function updateBuildUi()
     if buildSelectionLabel then
         if buildMode then
             local unitCost = config and config.cost or 0
-            local orientation = hasAlternateOrientation(config) and (' | ' .. getOrientationLabel()) or ''
+            local orientation = hasAlternateOrientation(config) and (' | ' .. getOrientationLabel(buildMode.orientation or 0)) or ''
             buildSelectionLabel:setText(string.format('%s  (%d)%s', getStructureLabel(buildMode.material, buildMode.structureType), unitCost, orientation))
         else
             buildSelectionLabel:setText(tr('Select a structure'))
@@ -145,12 +176,16 @@ local function updateBuildUi()
     end
 
     if buildQueueLabel then
-        if count > 0 and buildMode then
+        if buildPending then
+            local processed = pendingBuilt + pendingFailed
+            buildQueueLabel:setText(string.format('%d / %d built', processed, pendingTotal))
+            buildQueueLabel:setColor('#f0df9fff')
+        elseif count > 0 and buildMode then
             local available = walletValues[buildMode.material] or 0
             buildQueueLabel:setText(string.format('%d tile%s | %d / %d', count, count == 1 and '' or 's', cost, available))
             buildQueueLabel:setColor(cost <= available and '#7ee787ff' or '#ff7b72ff')
         else
-            buildQueueLabel:setText(tr('Click map squares to plan'))
+            buildQueueLabel:setText(tr('Plan only on adjacent squares'))
             buildQueueLabel:setColor('#9d9d9dff')
         end
     end
@@ -159,16 +194,18 @@ local function updateBuildUi()
         local enough = buildMode and cost > 0 and cost <= (walletValues[buildMode.material] or 0)
         confirmBuildButton:setEnabled(not buildPending and enough)
     end
+
     if rotateBuildButton then
         rotateBuildButton:setEnabled(not buildPending and buildMode ~= nil and hasAlternateOrientation(config))
         if buildMode and hasAlternateOrientation(config) then
-            rotateBuildButton:setTooltip(string.format('%s: %s', tr('Orientation'), getOrientationLabel()))
+            rotateBuildButton:setTooltip(tr('Rotate the planned piece under the cursor, or the next preview.'))
         else
             rotateBuildButton:setTooltip(tr('No alternate orientation is available for this structure yet.'))
         end
     end
+
     if cancelBuildButton then
-        cancelBuildButton:setEnabled(buildMode ~= nil or count > 0)
+        cancelBuildButton:setEnabled(not buildPending and (buildMode ~= nil or count > 0))
     end
 end
 
@@ -181,64 +218,84 @@ local function setBuildButtonSelected(selectedWidget)
     end
 end
 
-local function getRelativePosition(position)
+local function isAdjacentBuildPosition(position)
     local player = g_game.getLocalPlayer()
     if not player or not position then
-        return nil
-    end
-
-    local playerPos = player:getPosition()
-    return {
-        x = position.x - playerPos.x,
-        y = position.y - playerPos.y,
-        z = position.z - playerPos.z
-    }
-end
-
-local function getAbsolutePosition(relative)
-    local player = g_game.getLocalPlayer()
-    if not player or not relative then
-        return nil
-    end
-
-    local playerPos = player:getPosition()
-    return {
-        x = playerPos.x + relative.x,
-        y = playerPos.y + relative.y,
-        z = playerPos.z + (relative.z or 0)
-    }
-end
-
-local function isRelativeBuildable(relative)
-    if not relative or relative.z ~= 0 then
         return false
     end
-    return math.max(math.abs(relative.x), math.abs(relative.y)) <= BUILD_MAX_RANGE
+
+    local playerPos = player:getPosition()
+    if playerPos.z ~= position.z then
+        return false
+    end
+
+    local distance = math.max(math.abs(playerPos.x - position.x), math.abs(playerPos.y - position.y))
+    return distance == BUILD_ADJACENT_RANGE
 end
 
-local function detachGhost(effect)
-    if not effect then
-        return
-    end
-    local player = g_game.getLocalPlayer()
-    if player then
-        player:detachEffect(effect)
+local function detachGhost(effect, owner)
+    if effect and owner then
+        owner:detachEffect(effect)
     end
 end
 
 local function removePreview(entry)
     if entry and entry.preview then
-        detachGhost(entry.preview)
+        detachGhost(entry.preview, entry.previewOwner)
         entry.preview = nil
+        entry.previewOwner = nil
     end
 end
 
 local function clearHoverPreview()
     if hoverPreview then
-        detachGhost(hoverPreview)
-        hoverPreview = nil
+        detachGhost(hoverPreview, hoverPreviewOwner)
     end
-    hoverRelative = nil
+    hoverPreview = nil
+    hoverPreviewOwner = nil
+    hoverPosition = nil
+    hoverValid = false
+end
+
+local function createBuildPreview(position, orientation, validPlacement)
+    local config = getBuildConfig()
+    local itemId = getSelectedBuildItemId(config, orientation or 0)
+    if not itemId or not position then
+        return nil, nil
+    end
+
+    local tile = g_map.getTile(position)
+    if not tile then
+        return nil, nil
+    end
+
+    local preview = AttachedEffect.create(itemId, ThingCategoryItem)
+    if not preview then
+        setStatus(tr('Could not create construction preview.'), '#ff7b72ff')
+        return nil, nil
+    end
+
+    preview:setOnTop(true)
+    preview:setPermanent(true)
+    preview:setFollowOwner(false)
+
+    local validShaderReady, invalidShaderReady = ensureBuildGhostShaders()
+    if validPlacement then
+        if validShaderReady then
+            preview:setShader(BUILD_GHOST_SHADER)
+        else
+            preview:setOpacity(0.46)
+        end
+    else
+        if invalidShaderReady then
+            preview:setShader(BUILD_GHOST_INVALID_SHADER)
+        else
+            preview:setOpacity(0.28)
+        end
+    end
+
+    tile:attachEffect(preview)
+    return preview, tile
 end
 
 local function clearBuildQueue()
@@ -285,10 +342,16 @@ local function disableBuildCursor()
 end
 
 local function cancelBuildMode(silent)
+    if buildPending then
+        return
+    end
+
     clearHoverPreview()
     clearBuildQueue()
     buildMode = nil
-    buildPending = false
+    pendingTotal = 0
+    pendingBuilt = 0
+    pendingFailed = 0
     disableBuildCursor()
     setBuildButtonSelected(nil)
     updateBuildUi()
@@ -297,113 +360,106 @@ local function cancelBuildMode(silent)
     end
 end
 
--- Build ghosts are AttachedEffects owned by the local player instead of Things
--- inserted into g_map. They therefore never change tile walk/path flags, and their
--- pixel offsets remain anchored to the player while the player walks.
-local function createBuildPreview(relative)
-    local config = getBuildConfig()
-    local itemId = getSelectedBuildItemId(config)
-    local player = g_game.getLocalPlayer()
-    if not itemId or not player or not relative then
-        return nil
+local function refreshEntryPreview(entry)
+    if not entry then
+        return
     end
 
-    local preview = AttachedEffect.create(itemId, ThingCategoryItem)
-    if not preview then
-        setStatus(tr('Could not create construction preview.'), '#ff7b72ff')
-        return nil
-    end
-
-    local spriteSize = g_gameConfig.getSpriteSize()
-    preview:setOffset(-relative.x * spriteSize, -relative.y * spriteSize)
-    preview:setOnTop(true)
-    preview:setFollowOwner(true)
-    preview:setPermanent(true)
-
-    if ensureBuildGhostShader() then
-        preview:setShader(BUILD_GHOST_SHADER)
-    else
-        preview:setOpacity(0.46)
-    end
-
-    player:attachEffect(preview)
-    return preview
+    removePreview(entry)
+    entry.preview, entry.previewOwner = createBuildPreview(entry.position, entry.orientation or 0, true)
 end
 
-local function addBuildPreview(relative)
-    if not buildMode or not relative then
+local function addBuildPreview(position)
+    if not buildMode or not position then
         return false
     end
 
-    local preview = createBuildPreview(relative)
-    if not preview then
-        return false
-    end
-
-    local key = buildRelativeKey(relative)
-    buildQueue[key] = {
-        relative = { x = relative.x, y = relative.y, z = relative.z or 0 },
-        preview = preview
+    local entry = {
+        position = copyPosition(position),
+        orientation = buildMode.orientation or 0,
     }
+    entry.preview, entry.previewOwner = createBuildPreview(entry.position, entry.orientation, true)
+    if not entry.preview then
+        return false
+    end
+
+    local key = buildPositionKey(entry.position)
+    buildQueue[key] = entry
     buildQueueOrder[#buildQueueOrder + 1] = key
     return true
 end
 
 local function refreshHoverPreview()
-    if not hoverRelative then
+    if not hoverPosition or not buildMode or buildPending then
         return
     end
 
-    local relative = { x = hoverRelative.x, y = hoverRelative.y, z = hoverRelative.z or 0 }
+    local position = copyPosition(hoverPosition)
+    local valid = isAdjacentBuildPosition(position)
+    local key = buildPositionKey(position)
     clearHoverPreview()
 
-    if buildQueue[buildRelativeKey(relative)] then
+    if buildQueue[key] then
+        hoverPosition = position
+        hoverValid = valid
         return
     end
 
-    hoverRelative = relative
-    hoverPreview = createBuildPreview(relative)
+    hoverPosition = position
+    hoverValid = valid
+    hoverPreview, hoverPreviewOwner = createBuildPreview(position, buildMode.orientation or 0, valid)
 end
 
 local function refreshBuildPreviews()
     for _, key in ipairs(buildQueueOrder) do
         local entry = buildQueue[key]
         if entry then
-            removePreview(entry)
-            entry.preview = createBuildPreview(entry.relative)
+            refreshEntryPreview(entry)
         end
     end
     refreshHoverPreview()
 end
 
 local function updateHoverPreview(position)
+    lastMapPosition = position and copyPosition(position) or nil
+
     if not buildMode or buildPending or not position then
         clearHoverPreview()
         return
     end
 
-    local relative = getRelativePosition(position)
-    if not isRelativeBuildable(relative) then
-        clearHoverPreview()
-        return
-    end
-
-    local key = buildRelativeKey(relative)
+    local key = buildPositionKey(position)
+    local valid = isAdjacentBuildPosition(position)
     if buildQueue[key] then
         clearHoverPreview()
+        hoverPosition = copyPosition(position)
+        hoverValid = valid
         return
     end
 
-    if hoverRelative and hoverPreview and buildRelativeKey(hoverRelative) == key then
+    if hoverPosition and hoverPreview and buildPositionKey(hoverPosition) == key and hoverValid == valid then
         return
     end
 
     clearHoverPreview()
-    hoverRelative = relative
-    hoverPreview = createBuildPreview(relative)
+    hoverPosition = copyPosition(position)
+    hoverValid = valid
+    hoverPreview, hoverPreviewOwner = createBuildPreview(hoverPosition, buildMode.orientation or 0, valid)
 end
 
-local function rotateBuildMode()
+local function rotatePlannedEntry(entry)
+    local config = getBuildConfig()
+    if not entry or not hasAlternateOrientation(config) then
+        return false
+    end
+
+    entry.orientation = entry.orientation == 1 and 0 or 1
+    refreshEntryPreview(entry)
+    setStatus(string.format('%s: %s', tr('Planned piece orientation'), getOrientationLabel(entry.orientation)), '#7ee787ff')
+    return true
+end
+
+local function rotateBuildAtPosition(position)
     if not buildMode or buildPending then
         return
     end
@@ -415,9 +471,42 @@ local function rotateBuildMode()
         return
     end
 
+    if position then
+        local entry = buildQueue[buildPositionKey(position)]
+        if entry and rotatePlannedEntry(entry) then
+            updateBuildUi()
+            return
+        end
+    end
+
     buildMode.orientation = buildMode.orientation == 1 and 0 or 1
-    refreshBuildPreviews()
-    setStatus(string.format('%s: %s', tr('Orientation'), getOrientationLabel()), '#7ee787ff')
+    refreshHoverPreview()
+    setStatus(string.format('%s: %s', tr('Next piece orientation'), getOrientationLabel(buildMode.orientation)), '#7ee787ff')
+    updateBuildUi()
+end
+
+local function pruneDistantPreviews()
+    if buildPending then
+        return
+    end
+
+    local kept = {}
+    local removed = 0
+    for _, key in ipairs(buildQueueOrder) do
+        local entry = buildQueue[key]
+        if entry and isAdjacentBuildPosition(entry.position) then
+            kept[#kept + 1] = key
+        elseif entry then
+            removePreview(entry)
+            buildQueue[key] = nil
+            removed = removed + 1
+        end
+    end
+    buildQueueOrder = kept
+
+    if removed > 0 then
+        setStatus(tr('Prebuild removed because you moved away from it.'), '#ffb86cff')
+    end
     updateBuildUi()
 end
 
@@ -426,13 +515,7 @@ local function toggleBuildPosition(position)
         return
     end
 
-    local relative = getRelativePosition(position)
-    if not isRelativeBuildable(relative) then
-        setStatus(tr('Build within 7 squares of your character.'), '#ffb86cff')
-        return
-    end
-
-    local key = buildRelativeKey(relative)
+    local key = buildPositionKey(position)
     local existing = buildQueue[key]
     if existing then
         removePreview(existing)
@@ -443,15 +526,21 @@ local function toggleBuildPosition(position)
         return
     end
 
+    if not isAdjacentBuildPosition(position) then
+        setStatus(tr('You can only plan structures on the 8 squares next to your character.'), '#ff7b72ff')
+        updateHoverPreview(position)
+        return
+    end
+
     if queueCount() >= BUILD_MAX_TILES then
         setStatus(string.format('Maximum %d squares per build batch.', BUILD_MAX_TILES), '#ffb86cff')
         return
     end
 
     clearHoverPreview()
-    if addBuildPreview(relative) then
-        local suffix = hasAlternateOrientation(getBuildConfig()) and (' | ' .. getOrientationLabel()) or ''
-        setStatus(tr('Planning construction...') .. suffix, '#7ee787ff')
+    if addBuildPreview(position) then
+        local suffix = hasAlternateOrientation(getBuildConfig()) and (' | ' .. getOrientationLabel(buildMode.orientation or 0)) or ''
+        setStatus(tr('Prebuild anchored') .. suffix, '#7ee787ff')
     end
     updateBuildUi()
 end
@@ -470,6 +559,7 @@ end
 local function onBuildMapHoverChange(self, hovered)
     if not hovered then
         clearHoverPreview()
+        lastMapPosition = nil
     end
     if previousMapHoverChange then
         previousMapHoverChange(self, hovered)
@@ -484,7 +574,8 @@ local function onBuildMapMouseRelease(self, mousePosition, mouseButton)
         end
         return true
     elseif buildMode and mouseButton == MouseRightButton then
-        rotateBuildMode()
+        local position = self:getPosition(mousePosition)
+        rotateBuildAtPosition(position)
         return true
     end
 
@@ -541,7 +632,7 @@ local function selectBuildMode(material, structureType, widget)
     buildPending = false
     setBuildButtonSelected(widget)
     enableBuildCursor()
-    local rotationHint = hasAlternateOrientation(config) and (' | ' .. tr('Right-click or Rotate to turn')) or ''
+    local rotationHint = hasAlternateOrientation(config) and (' | ' .. tr('Right-click a planned piece to rotate only that piece')) or ''
     setStatus(string.format('%s: %s%s', tr('Build mode'), getStructureLabel(material, structureType), rotationHint), '#7ee787ff')
     updateBuildUi()
 end
@@ -551,18 +642,24 @@ local function confirmBuild()
         return
     end
 
-    local positions = {}
+    pruneDistantPreviews()
+
+    local entries = {}
     for _, key in ipairs(buildQueueOrder) do
         local entry = buildQueue[key]
-        if entry then
-            local position = getAbsolutePosition(entry.relative)
-            if position then
-                positions[#positions + 1] = string.format('%d,%d,%d', position.x, position.y, position.z)
-            end
+        if entry and isAdjacentBuildPosition(entry.position) then
+            entries[#entries + 1] = string.format(
+                '%d,%d,%d,%d',
+                entry.position.x,
+                entry.position.y,
+                entry.position.z,
+                entry.orientation or 0
+            )
         end
     end
 
-    if #positions == 0 then
+    if #entries == 0 then
+        setStatus(tr('Place at least one adjacent prebuild first.'), '#ffb86cff')
         return
     end
 
@@ -573,16 +670,18 @@ local function confirmBuild()
 
     clearHoverPreview()
     buildPending = true
+    pendingTotal = #entries
+    pendingBuilt = 0
+    pendingFailed = 0
     updateBuildUi()
-    setStatus(tr('Confirming construction...'), '#f0df9fff')
+    setStatus(tr('Preparing construction queue...'), '#f0df9fff')
     protocol:sendExtendedOpcode(
         FARMING_OPCODE,
         string.format(
-            'build|confirm|%s|%s|%d|%s',
+            'build|confirm|%s|%s|v2|%s',
             buildMode.material,
             buildMode.structureType,
-            buildMode.orientation or 0,
-            table.concat(positions, ';')
+            table.concat(entries, ';')
         )
     )
 end
@@ -601,8 +700,8 @@ local function configureBuildButton(id, material, structureType)
     widget:setBorderWidth(1)
     widget:setBorderColor('#5a5a5aff')
 
-    -- Select on mouse-down instead of click-release so the preview already exists
-    -- while the player drags the pointer from the panel into the map.
+    -- Mouse-down selection allows the ghost to appear while dragging from the
+    -- panel toward the map, before the player releases the mouse button.
     widget.onMousePress = function(self, mousePosition, mouseButton)
         if mouseButton == MouseLeftButton then
             selectBuildMode(material, structureType, widget)
@@ -621,7 +720,7 @@ local function refreshCatalogUi(material)
         local widget = buildButtons[material .. ':' .. structureType]
         if widget and config.itemId then
             widget:setItemId(config.itemId)
-            local rotationText = hasAlternateOrientation(config) and ('\n' .. tr('Rotatable')) or ''
+            local rotationText = hasAlternateOrientation(config) and ('\n' .. tr('Rotatable per piece')) or ''
             widget:setTooltip(string.format('%s\nCost: %d %s%s', getStructureLabel(material, structureType), config.cost, material == 'wood' and tr('Wood') or tr('Stone'), rotationText))
         end
     end
@@ -660,7 +759,7 @@ local function createWindow()
     end
     if rotateBuildButton then
         rotateBuildButton.onClick = function()
-            rotateBuildMode()
+            rotateBuildAtPosition(lastMapPosition)
             return true
         end
     end
@@ -682,6 +781,7 @@ local function destroyWindow()
         rewardResetEvent = nil
     end
 
+    buildPending = false
     cancelBuildMode(true)
 
     if materialsWindow then
@@ -716,7 +816,9 @@ local function armFarming(menuPosition, lookThing, useThing, creatureThing)
         return
     end
 
-    cancelBuildMode(true)
+    if not buildPending then
+        cancelBuildMode(true)
+    end
 
     local protocol = g_game.getProtocolGame()
     if not protocol then
@@ -841,21 +943,85 @@ local function handleStatus(parts)
     end
 end
 
+local function removeBuiltQueueEntry(position)
+    local key = buildPositionKey(position)
+    local entry = buildQueue[key]
+    if not entry then
+        return
+    end
+    removePreview(entry)
+    buildQueue[key] = nil
+    removeQueueOrderKey(key)
+end
+
 local function handleBuild(parts)
     local result = parts[2]
-    if result == 'success' then
-        local count = tonumber(parts[5]) or 0
+    if result == 'accepted' then
+        pendingTotal = tonumber(parts[4]) or pendingTotal
+        local totalCost = tonumber(parts[5]) or 0
+        setStatus(string.format('Building 0/%d (-%d reserved)', pendingTotal, totalCost), '#f0df9fff')
+        updateBuildUi()
+    elseif result == 'piece' then
+        local position = {
+            x = tonumber(parts[5]) or 0,
+            y = tonumber(parts[6]) or 0,
+            z = tonumber(parts[7]) or 0,
+        }
+        local state = parts[9] or 'built'
+        removeBuiltQueueEntry(position)
+
+        if state == 'built' then
+            pendingBuilt = pendingBuilt + 1
+        else
+            pendingFailed = pendingFailed + 1
+        end
+
+        local processed = pendingBuilt + pendingFailed
+        if state == 'built' then
+            setStatus(string.format('Built %d/%d', processed, pendingTotal), '#7ee787ff')
+        else
+            setStatus(string.format('Skipped %d/%d: tile became unavailable', processed, pendingTotal), '#ffb86cff')
+        end
+        updateBuildUi()
+    elseif result == 'success' then
+        local count = tonumber(parts[5]) or pendingBuilt
         local cost = tonumber(parts[6]) or 0
+        local failed = tonumber(parts[8]) or pendingFailed
         buildPending = false
         clearHoverPreview()
         clearBuildQueue()
-        setStatus(string.format('Built %d tile%s (-%d)', count, count == 1 and '' or 's', cost), '#7ee787ff')
+        pendingTotal = 0
+        pendingBuilt = 0
+        pendingFailed = 0
+        if failed > 0 then
+            setStatus(string.format('Built %d structure%s (-%d), %d skipped/refunded', count, count == 1 and '' or 's', cost, failed), '#ffb86cff')
+        else
+            setStatus(string.format('Built %d structure%s (-%d)', count, count == 1 and '' or 's', cost), '#7ee787ff')
+        end
         updateBuildUi()
     elseif result == 'error' then
         buildPending = false
+        pendingTotal = 0
+        pendingBuilt = 0
+        pendingFailed = 0
+        pruneDistantPreviews()
         setStatus(parts[3] or tr('Construction failed.'), '#ff7b72ff')
         updateBuildUi()
     end
+end
+
+local function onLocalPlayerPositionChange(player, newPosition, oldPosition)
+    if buildPending then
+        return
+    end
+
+    clearHoverPreview()
+    scheduleEvent(function()
+        pruneDistantPreviews()
+        if lastMapPosition and buildMode then
+            updateHoverPreview(lastMapPosition)
+        end
+    end, 1)
 end
 
 function onExtendedOpcode(protocol, opcode, buffer)
@@ -889,6 +1055,7 @@ function onGameStart()
 end
 
 function onGameEnd()
+    buildPending = false
     cancelBuildMode(true)
     if materialsWindow then
         materialsWindow:hide()
@@ -896,11 +1063,14 @@ function onGameEnd()
 end
 
 function init()
-    ensureBuildGhostShader()
+    ensureBuildGhostShaders()
 
     connect(g_game, {
         onGameStart = onGameStart,
         onGameEnd = onGameEnd
+    })
+    connect(LocalPlayer, {
+        onPositionChange = onLocalPlayerPositionChange
     })
 
     ProtocolGame.registerExtendedOpcode(FARMING_OPCODE, onExtendedOpcode)
@@ -921,7 +1091,11 @@ function terminate()
         onGameStart = onGameStart,
         onGameEnd = onGameEnd
     })
+    disconnect(LocalPlayer, {
+        onPositionChange = onLocalPlayerPositionChange
+    })
 
+    buildPending = false
     destroyWindow()
     restoreMapHandler()
 end
