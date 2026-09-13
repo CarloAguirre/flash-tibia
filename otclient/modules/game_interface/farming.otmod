@@ -11,6 +11,12 @@ Module
     init()
     local siegeLoaded = pcall(dofile, 'farming_siege')
     if siegeLoaded and initSiege then
+      -- farming.lua registers opcode 217 before farming_siege.lua replaces the
+      -- global onExtendedOpcode function. Re-register it so siege receives build
+      -- completion/status packets and can clear special prebuilds correctly.
+      ProtocolGame.unregisterExtendedOpcode(217)
+      ProtocolGame.registerExtendedOpcode(217, onExtendedOpcode)
+
       -- farming_siege's bootstrap configures the UI immediately and also schedules
       -- a second configure pass 350ms later. Re-wrapping Build/Rotate/Cancel makes
       -- the normal Build callback point to its own wrapper and recurse forever.
