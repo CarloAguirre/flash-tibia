@@ -7,6 +7,10 @@ if not Farming or not Farming.handlePickUse then
 end
 
 local baseHandlePickUse = Farming.handlePickUse
+local DEMOLITION_DELAY_MS = 1500
+local DEMOLITION_EFFECT_MID_MS = 750
+
+Farming.demolitionJobs = Farming.demolitionJobs or {}
 
 local function buildPositionKey(position)
 	return string.format("%d:%d:%d", position.x, position.y, position.z)
@@ -46,33 +50,122 @@ local function getPersistedStructure(position, itemId)
 	return structure
 end
 
-local function dismantleStructure(player, target, position, structure)
+local function structureStillPersisted(job)
+	local query = db.storeQuery(string.format(
+		"SELECT `id` FROM `player_structures` WHERE `id`=%d AND `player_id`=%d AND `item_id`=%d " ..
+		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
+		job.structureId,
+		job.playerGuid,
+		job.itemId,
+		job.position.x,
+		job.position.y,
+		job.position.z
+	))
+	if not query then
+		return false
+	end
+	Result.free(query)
+	return true
+end
+
+local function emitDemolitionEffect(structureId)
+	local job = Farming.demolitionJobs[structureId]
+	if not job then
+		return
+	end
+
+	local player = Player(job.playerId)
+	if not player or player:getGuid() ~= job.playerGuid or not isAdjacent(player, job.position) then
+		return
+	end
+
+	job.position:sendMagicEffect(CONST_ME_POFF)
+end
+
+local function completeDemolition(structureId)
+	local job = Farming.demolitionJobs[structureId]
+	if not job then
+		return
+	end
+	Farming.demolitionJobs[structureId] = nil
+
+	local player = Player(job.playerId)
+	if not player or player:getGuid() ~= job.playerGuid then
+		return
+	end
+
+	if not isAdjacent(player, job.position) then
+		player:sendCancelMessage("You moved too far away before dismantling finished.")
+		return
+	end
+
+	if not structureStillPersisted(job) then
+		player:sendCancelMessage("That structure is no longer available to dismantle.")
+		return
+	end
+
+	local tile = Tile(job.position)
+	local target = tile and tile:getItemById(job.itemId) or nil
+	if not target then
+		player:sendCancelMessage("That structure is no longer available to dismantle.")
+		return
+	end
+
+	local deleted = db.query(string.format(
+		"DELETE FROM `player_structures` WHERE `id`=%d AND `player_id`=%d",
+		job.structureId,
+		job.playerGuid
+	))
+	if not deleted then
+		player:sendCancelMessage("The structure could not be dismantled right now.")
+		return
+	end
+
+	-- The item is removed only after the 1.5 second dismantling window completes.
+	-- Because the DB row was revalidated above, native map objects remain protected.
+	target:remove()
+	Farming.structurePositions[buildPositionKey(job.position)] = nil
+
+	job.position:sendMagicEffect(CONST_ME_BLOCKHIT)
+	job.position:sendMagicEffect(CONST_ME_POFF)
+	player:sendTextMessage(
+		MESSAGE_EVENT_ADVANCE,
+		string.format("Dismantled your %s %s.", job.material, job.structureType)
+	)
+end
+
+local function startDemolition(player, position, structure)
 	if structure.playerId ~= player:getGuid() then
 		player:sendCancelMessage("You can only dismantle structures that you built.")
 		return true, true
 	end
 
-	local deleted = db.query(string.format(
-		"DELETE FROM `player_structures` WHERE `id`=%d AND `player_id`=%d",
-		structure.id,
-		player:getGuid()
-	))
-	if not deleted then
-		player:sendCancelMessage("The structure could not be dismantled right now.")
+	if Farming.demolitionJobs[structure.id] then
+		player:sendCancelMessage("That structure is already being dismantled.")
 		return true, true
 	end
 
-	-- The target was proven to be the persisted player structure above. Removing
-	-- it here cannot affect a native wall/door/window because native objects have
-	-- no matching player_structures row.
-	target:remove()
-	Farming.structurePositions[buildPositionKey(position)] = nil
+	local job = {
+		structureId = structure.id,
+		playerId = player:getId(),
+		playerGuid = player:getGuid(),
+		itemId = structure.itemId,
+		material = structure.material,
+		structureType = structure.structureType,
+		position = Position(position.x, position.y, position.z),
+	}
+	Farming.demolitionJobs[structure.id] = job
 
-	position:sendMagicEffect(CONST_ME_POFF)
 	player:sendTextMessage(
 		MESSAGE_EVENT_ADVANCE,
-		string.format("Dismantled your %s %s.", structure.material, structure.structureType)
+		string.format("Dismantling your %s %s...", structure.material, structure.structureType)
 	)
+
+	-- Mirror the construction feedback: dust while the structure remains visible,
+	-- then remove it only after the full 1.5 second dismantling duration.
+	addEvent(emitDemolitionEffect, 1, structure.id)
+	addEvent(emitDemolitionEffect, DEMOLITION_EFFECT_MID_MS, structure.id)
+	addEvent(completeDemolition, DEMOLITION_DELAY_MS, structure.id)
 	return true, true
 end
 
@@ -93,7 +186,7 @@ function Farming.handlePickUse(player, item, target, toPosition)
 		if structure then
 			Farming.armed[player:getId()] = nil
 			Farming.stop(player)
-			return dismantleStructure(player, target, toPosition, structure)
+			return startDemolition(player, toPosition, structure)
 		end
 	end
 
