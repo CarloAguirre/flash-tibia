@@ -27,6 +27,7 @@ if (targetDirs.length === 0) {
 const metadataPattern = /loadPackage\(\{files:\[(.*?)\],remote_package_size:(\d+),package_uuid:"(sha256-[0-9a-f]+)"\}\)/s;
 const filePattern = /\{filename:"((?:\\.|[^"\\])*)",start:(\d+),end:(\d+)\}/g;
 const generatedDirsPattern = /\n\s*\/\/ BEGIN repack-otclient-preload generated directories\n[\s\S]*?\/\/ END repack-otclient-preload generated directories\n/;
+const generatedDirsEndMarker = '  // END repack-otclient-preload generated directories';
 const runWithFsPattern = /((?:async\s+)?function\s+runWithFS\s*\([^)]*\)\s*\{)/;
 
 function decodeJsString(value) {
@@ -42,18 +43,23 @@ function sourcePathFor(filename) {
   return path.join(sourceRoot, normalizePreloadFilename(filename).replace(/^\/+/, '').split('/').join(path.sep));
 }
 
-// Farming now has an optional secondary client script. When any farming UI/module
-// asset is being repacked, include that script automatically so the .otmod cannot
-// point at a file that is absent from the Emscripten preload filesystem.
+function requestAuxiliaryFile(filename) {
+  const normalized = normalizePreloadFilename(filename);
+  const sourcePath = sourcePathFor(normalized);
+  if (fs.existsSync(sourcePath) && fs.statSync(sourcePath).isFile() && !addFiles.includes(normalized)) {
+    addFiles.push(normalized);
+  }
+}
+
+// Farming has preload files that may live in directories introduced by previous
+// repacks. Always keep them in the auxiliary set so repeated repacks cannot drop
+// the virtual directories required to mount them.
 const farmingPreloadRequested = replaceAll || replacePrefixes.some((prefix) =>
   normalizePreloadFilename(prefix).startsWith('/modules/game_interface/farming')
 );
 if (farmingPreloadRequested) {
-  const siegeFile = '/modules/game_interface/farming_siege.lua';
-  const siegeSource = sourcePathFor(siegeFile);
-  if (fs.existsSync(siegeSource) && fs.statSync(siegeSource).isFile() && !addFiles.includes(siegeFile)) {
-    addFiles.push(siegeFile);
-  }
+  requestAuxiliaryFile('/modules/game_interface/farming_siege.lua');
+  requestAuxiliaryFile('/modules/game_interface/shaders/build_ghost.frag');
 }
 
 function shouldReplace(filename) {
@@ -111,11 +117,22 @@ function ensurePreloadDirectories(jsText, filenames, jsPath) {
     return jsText;
   }
 
-  const block = `\n  // BEGIN repack-otclient-preload generated directories\n${calls.join('\n')}\n  // END repack-otclient-preload generated directories\n`;
-  if (generatedDirsPattern.test(jsText)) {
-    return jsText.replace(generatedDirsPattern, block);
+  const existingMatch = jsText.match(generatedDirsPattern);
+  if (existingMatch) {
+    let block = existingMatch[0];
+    const missingCalls = calls.filter((call) => !block.includes(call));
+    if (missingCalls.length === 0) {
+      return jsText;
+    }
+
+    block = block.replace(
+      generatedDirsEndMarker,
+      `${missingCalls.join('\n')}\n${generatedDirsEndMarker}`
+    );
+    return jsText.replace(existingMatch[0], block);
   }
 
+  const block = `\n  // BEGIN repack-otclient-preload generated directories\n${calls.join('\n')}\n${generatedDirsEndMarker}\n`;
   if (!runWithFsPattern.test(jsText)) {
     throw new Error(`Could not find runWithFS in ${jsPath}; cannot safely add preload directories`);
   }
