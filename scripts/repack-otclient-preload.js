@@ -26,6 +26,8 @@ if (targetDirs.length === 0) {
 
 const metadataPattern = /loadPackage\(\{files:\[(.*?)\],remote_package_size:(\d+),package_uuid:"(sha256-[0-9a-f]+)"\}\)/s;
 const filePattern = /\{filename:"((?:\\.|[^"\\])*)",start:(\d+),end:(\d+)\}/g;
+const generatedDirsPattern = /\n\s*\/\/ BEGIN repack-otclient-preload generated directories\n[\s\S]*?\/\/ END repack-otclient-preload generated directories\n/;
+const runWithFsPattern = /((?:async\s+)?function\s+runWithFS\s*\([^)]*\)\s*\{)/;
 
 function decodeJsString(value) {
   return JSON.parse(`"${value}"`);
@@ -64,6 +66,47 @@ function parseMetadata(jsText, jsPath) {
     remotePackageSize: Number(metadataMatch[2]),
     entries
   };
+}
+
+function buildPreloadDirectoryCalls(filenames) {
+  const calls = [];
+  const seen = new Set();
+
+  for (const requestedFile of filenames) {
+    const normalized = normalizePreloadFilename(requestedFile);
+    const parts = normalized.replace(/^\/+/, '').split('/');
+    let parent = '/';
+
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      const name = parts[index];
+      const key = `${parent}\0${name}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        calls.push(`  Module['FS_createPath'](${JSON.stringify(parent)}, ${JSON.stringify(name)}, true, true);`);
+      }
+      parent = parent === '/' ? `/${name}` : `${parent}/${name}`;
+    }
+  }
+
+  return calls;
+}
+
+function ensurePreloadDirectories(jsText, filenames, jsPath) {
+  const calls = buildPreloadDirectoryCalls(filenames);
+  if (calls.length === 0) {
+    return jsText;
+  }
+
+  const block = `\n  // BEGIN repack-otclient-preload generated directories\n${calls.join('\n')}\n  // END repack-otclient-preload generated directories\n`;
+  if (generatedDirsPattern.test(jsText)) {
+    return jsText.replace(generatedDirsPattern, block);
+  }
+
+  if (!runWithFsPattern.test(jsText)) {
+    throw new Error(`Could not find runWithFS in ${jsPath}; cannot safely add preload directories`);
+  }
+
+  return jsText.replace(runWithFsPattern, `$1${block}`);
 }
 
 function repack(targetDir) {
@@ -124,8 +167,11 @@ function repack(targetDir) {
     .join(',');
   const newMetadata = `loadPackage({files:[${filesText}],remote_package_size:${newData.length},package_uuid:"${packageUuid}"})`;
 
+  let newJsText = jsText.replace(metadata.original, newMetadata);
+  newJsText = ensurePreloadDirectories(newJsText, addFiles, jsPath);
+
   fs.writeFileSync(dataPath, newData);
-  fs.writeFileSync(jsPath, jsText.replace(metadata.original, newMetadata));
+  fs.writeFileSync(jsPath, newJsText);
 
   console.log(`${path.relative(repoRoot, targetDir)} replaced=${replaced} added=${added} size=${oldData.length}->${newData.length} uuid=${packageUuid}`);
 }
