@@ -1,6 +1,7 @@
 local FARMING_OPCODE = 217
 local PICK_ITEM_ID = 3456
 local BUILD_MAX_RANGE = 7
+local BUILD_MAX_TILES = 40
 local BUILD_GHOST_SHADER = 'Outfit - Build Ghost'
 
 local materialsWindow = nil
@@ -23,8 +24,12 @@ local buildQueueOrder = {}
 local buildPending = false
 local buildCursorActive = false
 local buildGhostShaderReady = false
+local hoverPreview = nil
+local hoverRelative = nil
 local mapPanel = nil
 local previousMapMouseRelease = nil
+local previousMapMouseMove = nil
+local previousMapHoverChange = nil
 local mapHandlerInstalled = false
 
 local structureNames = {
@@ -41,8 +46,8 @@ local function splitPayload(buffer)
     return parts
 end
 
-local function buildPositionKey(position)
-    return string.format('%d:%d:%d', position.x, position.y, position.z)
+local function buildRelativeKey(relative)
+    return string.format('%d:%d:%d', relative.x, relative.y, relative.z or 0)
 end
 
 local function setStatus(text, color)
@@ -176,11 +181,64 @@ local function setBuildButtonSelected(selectedWidget)
     end
 end
 
+local function getRelativePosition(position)
+    local player = g_game.getLocalPlayer()
+    if not player or not position then
+        return nil
+    end
+
+    local playerPos = player:getPosition()
+    return {
+        x = position.x - playerPos.x,
+        y = position.y - playerPos.y,
+        z = position.z - playerPos.z
+    }
+end
+
+local function getAbsolutePosition(relative)
+    local player = g_game.getLocalPlayer()
+    if not player or not relative then
+        return nil
+    end
+
+    local playerPos = player:getPosition()
+    return {
+        x = playerPos.x + relative.x,
+        y = playerPos.y + relative.y,
+        z = playerPos.z + (relative.z or 0)
+    }
+end
+
+local function isRelativeBuildable(relative)
+    if not relative or relative.z ~= 0 then
+        return false
+    end
+    return math.max(math.abs(relative.x), math.abs(relative.y)) <= BUILD_MAX_RANGE
+end
+
+local function detachGhost(effect)
+    if not effect then
+        return
+    end
+    local player = g_game.getLocalPlayer()
+    if player then
+        player:detachEffect(effect)
+    end
+end
+
 local function removePreview(entry)
     if entry and entry.preview then
-        g_map.removeThing(entry.preview)
+        detachGhost(entry.preview)
         entry.preview = nil
     end
+end
+
+local function clearHoverPreview()
+    if hoverPreview then
+        detachGhost(hoverPreview)
+        hoverPreview = nil
+    end
+    hoverRelative = nil
 end
 
 local function clearBuildQueue()
@@ -227,6 +285,7 @@ local function disableBuildCursor()
 end
 
 local function cancelBuildMode(silent)
+    clearHoverPreview()
     clearBuildQueue()
     buildMode = nil
     buildPending = false
@@ -238,49 +297,72 @@ local function cancelBuildMode(silent)
     end
 end
 
-local function createBuildPreview(position)
+-- Build ghosts are AttachedEffects owned by the local player instead of Things
+-- inserted into g_map. They therefore never change tile walk/path flags, and their
+-- pixel offsets remain anchored to the player while the player walks.
+local function createBuildPreview(relative)
     local config = getBuildConfig()
     local itemId = getSelectedBuildItemId(config)
-    if not itemId then
-        setStatus(tr('Construction catalogue is not ready yet.'), '#ff7b72ff')
+    local player = g_game.getLocalPlayer()
+    if not itemId or not player or not relative then
         return nil
     end
 
-    local preview = Item.create(itemId)
+    local preview = AttachedEffect.create(itemId, ThingCategoryItem)
     if not preview then
         setStatus(tr('Could not create construction preview.'), '#ff7b72ff')
         return nil
     end
 
-    -- The preview exists only on this client. A dedicated fragment shader keeps
-    -- the real sprite readable while making it visibly translucent and green.
+    local spriteSize = g_gameConfig.getSpriteSize()
+    preview:setOffset(-relative.x * spriteSize, -relative.y * spriteSize)
+    preview:setOnTop(true)
+    preview:setFollowOwner(true)
+    preview:setPermanent(true)
+
     if ensureBuildGhostShader() then
         preview:setShader(BUILD_GHOST_SHADER)
     else
-        preview:setMarked('#69db7c99')
+        preview:setOpacity(0.46)
     end
 
-    g_map.addThing(preview, position, -1)
+    player:attachEffect(preview)
     return preview
 end
 
-local function addBuildPreview(position)
-    if not buildMode then
+local function addBuildPreview(relative)
+    if not buildMode or not relative then
         return false
     end
 
-    local preview = createBuildPreview(position)
+    local preview = createBuildPreview(relative)
     if not preview then
         return false
     end
 
-    local key = buildPositionKey(position)
+    local key = buildRelativeKey(relative)
     buildQueue[key] = {
-        position = { x = position.x, y = position.y, z = position.z },
+        relative = { x = relative.x, y = relative.y, z = relative.z or 0 },
         preview = preview
     }
     buildQueueOrder[#buildQueueOrder + 1] = key
     return true
+end
+
+local function refreshHoverPreview()
+    if not hoverRelative then
+        return
+    end
+
+    local relative = { x = hoverRelative.x, y = hoverRelative.y, z = hoverRelative.z or 0 }
+    clearHoverPreview()
+
+    if buildQueue[buildRelativeKey(relative)] then
+        return
+    end
+
+    hoverRelative = relative
+    hoverPreview = createBuildPreview(relative)
 end
 
 local function refreshBuildPreviews()
@@ -288,9 +370,37 @@ local function refreshBuildPreviews()
         local entry = buildQueue[key]
         if entry then
             removePreview(entry)
-            entry.preview = createBuildPreview(entry.position)
+            entry.preview = createBuildPreview(entry.relative)
         end
     end
+    refreshHoverPreview()
+end
+
+local function updateHoverPreview(position)
+    if not buildMode or buildPending or not position then
+        clearHoverPreview()
+        return
+    end
+
+    local relative = getRelativePosition(position)
+    if not isRelativeBuildable(relative) then
+        clearHoverPreview()
+        return
+    end
+
+    local key = buildRelativeKey(relative)
+    if buildQueue[key] then
+        clearHoverPreview()
+        return
+    end
+
+    if hoverRelative and hoverPreview and buildRelativeKey(hoverRelative) == key then
+        return
+    end
+
+    clearHoverPreview()
+    hoverRelative = relative
+    hoverPreview = createBuildPreview(relative)
 end
 
 local function rotateBuildMode()
@@ -316,37 +426,54 @@ local function toggleBuildPosition(position)
         return
     end
 
-    local player = g_game.getLocalPlayer()
-    if not player then
-        return
-    end
-
-    local playerPos = player:getPosition()
-    if playerPos.z ~= position.z or math.max(math.abs(playerPos.x - position.x), math.abs(playerPos.y - position.y)) > BUILD_MAX_RANGE then
+    local relative = getRelativePosition(position)
+    if not isRelativeBuildable(relative) then
         setStatus(tr('Build within 7 squares of your character.'), '#ffb86cff')
         return
     end
 
-    local key = buildPositionKey(position)
+    local key = buildRelativeKey(relative)
     local existing = buildQueue[key]
     if existing then
         removePreview(existing)
         buildQueue[key] = nil
         removeQueueOrderKey(key)
+        updateHoverPreview(position)
         updateBuildUi()
         return
     end
 
-    if queueCount() >= 40 then
-        setStatus(tr('Maximum 40 squares per build batch.'), '#ffb86cff')
+    if queueCount() >= BUILD_MAX_TILES then
+        setStatus(string.format('Maximum %d squares per build batch.', BUILD_MAX_TILES), '#ffb86cff')
         return
     end
 
-    if addBuildPreview(position) then
+    clearHoverPreview()
+    if addBuildPreview(relative) then
         local suffix = hasAlternateOrientation(getBuildConfig()) and (' | ' .. getOrientationLabel()) or ''
         setStatus(tr('Planning construction...') .. suffix, '#7ee787ff')
     end
     updateBuildUi()
+end
+
+local function onBuildMapMouseMove(self, mousePosition, mouseMoved)
+    if buildMode and not buildPending then
+        updateHoverPreview(self:getPosition(mousePosition))
+    end
+
+    if previousMapMouseMove then
+        return previousMapMouseMove(self, mousePosition, mouseMoved)
+    end
+    return false
+end
+
+local function onBuildMapHoverChange(self, hovered)
+    if not hovered then
+        clearHoverPreview()
+    end
+    if previousMapHoverChange then
+        previousMapHoverChange(self, hovered)
+    end
 end
 
 local function onBuildMapMouseRelease(self, mousePosition, mouseButton)
@@ -375,16 +502,25 @@ local function installMapHandler()
     if not mapPanel then
         return
     end
+
     previousMapMouseRelease = mapPanel.onMouseRelease
+    previousMapMouseMove = mapPanel.onMouseMove
+    previousMapHoverChange = mapPanel.onHoverChange
     mapPanel.onMouseRelease = onBuildMapMouseRelease
+    mapPanel.onMouseMove = onBuildMapMouseMove
+    mapPanel.onHoverChange = onBuildMapHoverChange
     mapHandlerInstalled = true
 end
 
 local function restoreMapHandler()
     if mapHandlerInstalled and mapPanel then
         mapPanel.onMouseRelease = previousMapMouseRelease
+        mapPanel.onMouseMove = previousMapMouseMove
+        mapPanel.onHoverChange = previousMapHoverChange
     end
     previousMapMouseRelease = nil
+    previousMapMouseMove = nil
+    previousMapHoverChange = nil
     mapPanel = nil
     mapHandlerInstalled = false
 end
@@ -396,6 +532,7 @@ local function selectBuildMode(material, structureType, widget)
         return
     end
 
+    clearHoverPreview()
     if buildMode and (buildMode.material ~= material or buildMode.structureType ~= structureType) then
         clearBuildQueue()
     end
@@ -418,7 +555,10 @@ local function confirmBuild()
     for _, key in ipairs(buildQueueOrder) do
         local entry = buildQueue[key]
         if entry then
-            positions[#positions + 1] = string.format('%d,%d,%d', entry.position.x, entry.position.y, entry.position.z)
+            local position = getAbsolutePosition(entry.relative)
+            if position then
+                positions[#positions + 1] = string.format('%d,%d,%d', position.x, position.y, position.z)
+            end
         end
     end
 
@@ -431,6 +571,7 @@ local function confirmBuild()
         return
     end
 
+    clearHoverPreview()
     buildPending = true
     updateBuildUi()
     setStatus(tr('Confirming construction...'), '#f0df9fff')
@@ -454,13 +595,20 @@ local function configureBuildButton(id, material, structureType)
     if not widget then
         return
     end
+
     buildButtons[material .. ':' .. structureType] = widget
     widget:setVirtual(true)
     widget:setBorderWidth(1)
     widget:setBorderColor('#5a5a5aff')
-    widget.onClick = function()
-        selectBuildMode(material, structureType, widget)
-        return true
+
+    -- Select on mouse-down instead of click-release so the preview already exists
+    -- while the player drags the pointer from the panel into the map.
+    widget.onMousePress = function(self, mousePosition, mouseButton)
+        if mouseButton == MouseLeftButton then
+            selectBuildMode(material, structureType, widget)
+            return true
+        end
+        return false
     end
 end
 
@@ -699,6 +847,7 @@ local function handleBuild(parts)
         local count = tonumber(parts[5]) or 0
         local cost = tonumber(parts[6]) or 0
         buildPending = false
+        clearHoverPreview()
         clearBuildQueue()
         setStatus(string.format('Built %d tile%s (-%d)', count, count == 1 and '' or 's', cost), '#7ee787ff')
         updateBuildUi()
