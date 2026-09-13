@@ -9,21 +9,38 @@ end
 Farming.BUILD_ORIENTATION_HORIZONTAL = 0
 Farming.BUILD_ORIENTATION_VERTICAL = 1
 
--- Curated two-direction pairs verified against the repository item catalogue.
--- Wall ranges contain several corner/junction sprites without explicit orientation
--- metadata, so wall rotation stays disabled until its exact straight pair is known.
-if Farming.buildCatalog.wood and Farming.buildCatalog.wood.door then
-	Farming.buildCatalog.wood.door.rotatedItemId = 5281
+-- Only expose orientation pairs whose horizontal/base item still matches the
+-- catalogue entry. This prevents a future catalogue change from accidentally
+-- pairing a structure with a stale rotated sprite.
+local VERIFIED_ROTATED_VARIANTS = {
+	wood = {
+		door = { baseItemId = 5278, rotatedItemId = 5281 },
+		window = { baseItemId = 5275, rotatedItemId = 5276 },
+	},
+	stone = {
+		door = { baseItemId = 5278, rotatedItemId = 5281 },
+		window = { baseItemId = 1465, rotatedItemId = 1471 },
+	},
+}
+
+local function registerVerifiedRotatedVariants()
+	for material, structures in pairs(VERIFIED_ROTATED_VARIANTS) do
+		local materialCatalog = Farming.buildCatalog[material]
+		if materialCatalog then
+			for structureType, variant in pairs(structures) do
+				local config = materialCatalog[structureType]
+				if config and tonumber(config.itemId) == variant.baseItemId and variant.rotatedItemId ~= variant.baseItemId then
+					config.rotatedItemId = variant.rotatedItemId
+				end
+			end
+		end
+	end
 end
-if Farming.buildCatalog.stone and Farming.buildCatalog.stone.door then
-	Farming.buildCatalog.stone.door.rotatedItemId = 5281
-end
-if Farming.buildCatalog.wood and Farming.buildCatalog.wood.window then
-	Farming.buildCatalog.wood.window.rotatedItemId = 5276
-end
-if Farming.buildCatalog.stone and Farming.buildCatalog.stone.window then
-	Farming.buildCatalog.stone.window.rotatedItemId = 1471
-end
+
+-- Wall ranges contain several straight/corner/junction sprites and items.xml
+-- does not encode which two are the horizontal/vertical straight pair. Keep wall
+-- rotation disabled until those two IDs are visually verified instead of guessing.
+registerVerifiedRotatedVariants()
 
 local function buildPositionKey(position)
 	return string.format("%d:%d:%d", position.x, position.y, position.z)
