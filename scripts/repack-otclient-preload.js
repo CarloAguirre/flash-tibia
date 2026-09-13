@@ -42,6 +42,20 @@ function sourcePathFor(filename) {
   return path.join(sourceRoot, normalizePreloadFilename(filename).replace(/^\/+/, '').split('/').join(path.sep));
 }
 
+// Farming now has an optional secondary client script. When any farming UI/module
+// asset is being repacked, include that script automatically so the .otmod cannot
+// point at a file that is absent from the Emscripten preload filesystem.
+const farmingPreloadRequested = replaceAll || replacePrefixes.some((prefix) =>
+  normalizePreloadFilename(prefix).startsWith('/modules/game_interface/farming')
+);
+if (farmingPreloadRequested) {
+  const siegeFile = '/modules/game_interface/farming_siege.lua';
+  const siegeSource = sourcePathFor(siegeFile);
+  if (fs.existsSync(siegeSource) && fs.statSync(siegeSource).isFile() && !addFiles.includes(siegeFile)) {
+    addFiles.push(siegeFile);
+  }
+}
+
 function shouldReplace(filename) {
   return replaceAll || replacePrefixes.some((prefix) => filename.startsWith(prefix));
 }
