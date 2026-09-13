@@ -1,6 +1,6 @@
 -- Construction enhancements layered on top of the base Farming implementation.
--- Keeps the original farming system backward compatible while adding orientation
--- metadata, orientation-aware persistence, and lightweight build feedback.
+-- Keeps the original farming system backward compatible while adding orientation,
+-- non-instant sequential construction and authoritative adjacency validation.
 
 if not Farming then
 	return
@@ -8,10 +8,13 @@ end
 
 Farming.BUILD_ORIENTATION_HORIZONTAL = 0
 Farming.BUILD_ORIENTATION_VERTICAL = 1
+Farming.BUILD_ADJACENT_RANGE = 1
+Farming.BUILD_STEP_MS = 2000
+Farming.buildBatches = Farming.buildBatches or {}
+Farming.buildBatchSequence = Farming.buildBatchSequence or 0
 
 -- Only expose orientation pairs whose horizontal/base item still matches the
--- catalogue entry. This prevents a future catalogue change from accidentally
--- pairing a structure with a stale rotated sprite.
+-- catalogue entry. This prevents stale rotated sprites after catalogue changes.
 local VERIFIED_ROTATED_VARIANTS = {
 	wood = {
 		door = { baseItemId = 5278, rotatedItemId = 5281 },
@@ -37,22 +40,23 @@ local function registerVerifiedRotatedVariants()
 	end
 end
 
--- Wall ranges contain several straight/corner/junction sprites and items.xml
--- does not encode which two are the horizontal/vertical straight pair. Keep wall
--- rotation disabled until those two IDs are visually verified instead of guessing.
+-- Wall ranges contain straight/corner/junction sprites and items.xml does not
+-- identify the exact perpendicular pair, so wall rotation stays disabled until
+-- those two IDs are visually verified.
 registerVerifiedRotatedVariants()
 
 local function buildPositionKey(position)
 	return string.format("%d:%d:%d", position.x, position.y, position.z)
 end
 
-local function isWithinBuildRange(player, position)
+local function isAdjacentBuildPosition(player, position)
 	local playerPosition = player:getPosition()
 	if playerPosition.z ~= position.z then
 		return false
 	end
 
-	return math.max(math.abs(playerPosition.x - position.x), math.abs(playerPosition.y - position.y)) <= Farming.BUILD_MAX_RANGE
+	local distance = math.max(math.abs(playerPosition.x - position.x), math.abs(playerPosition.y - position.y))
+	return distance == Farming.BUILD_ADJACENT_RANGE
 end
 
 local function buildError(player, message)
@@ -60,51 +64,78 @@ local function buildError(player, message)
 	player:sendCancelMessage(message)
 end
 
-local function parseBuildPayload(rawPayload)
-	local orientation = Farming.BUILD_ORIENTATION_HORIZONTAL
-	local rawPositions = tostring(rawPayload or "")
-	local orientationToken, positionsToken = rawPositions:match("^([01])|(.+)$")
-	if orientationToken and positionsToken then
-		orientation = tonumber(orientationToken) or Farming.BUILD_ORIENTATION_HORIZONTAL
-		rawPositions = positionsToken
+local function resolveItemId(config, orientation)
+	if orientation == Farming.BUILD_ORIENTATION_VERTICAL then
+		if not config.rotatedItemId then
+			return nil
+		end
+		return config.rotatedItemId
 	end
+	return config.itemId
+end
 
-	local positions = {}
+-- v2 payload: v2|x,y,z,orientation;x,y,z,orientation
+-- Legacy payloads remain accepted so older clients do not break.
+local function parseBuildPayload(rawPayload)
+	local raw = tostring(rawPayload or "")
+	local entries = {}
 	local seen = {}
-	for token in rawPositions:gmatch("[^;]+") do
-		local x, y, z = token:match("^(%-?%d+),(%-?%d+),(%-?%d+)$")
-		if not x then
-			return nil, nil, "Invalid build position."
+
+	local v2Positions = raw:match("^v2|(.+)$")
+	if v2Positions then
+		for token in v2Positions:gmatch("[^;]+") do
+			local x, y, z, orientation = token:match("^(%-?%d+),(%-?%d+),(%-?%d+),([01])$")
+			if not x then
+				return nil, "Invalid build position or orientation."
+			end
+
+			local position = Position(tonumber(x), tonumber(y), tonumber(z))
+			local key = buildPositionKey(position)
+			if not seen[key] then
+				seen[key] = true
+				entries[#entries + 1] = {
+					position = position,
+					orientation = tonumber(orientation) or Farming.BUILD_ORIENTATION_HORIZONTAL,
+				}
+				if #entries > Farming.BUILD_MAX_TILES then
+					return nil, string.format("You can queue at most %d tiles at once.", Farming.BUILD_MAX_TILES)
+				end
+			end
+		end
+	else
+		local orientation = Farming.BUILD_ORIENTATION_HORIZONTAL
+		local orientationToken, positionsToken = raw:match("^([01])|(.+)$")
+		if orientationToken and positionsToken then
+			orientation = tonumber(orientationToken) or Farming.BUILD_ORIENTATION_HORIZONTAL
+			raw = positionsToken
 		end
 
-		local position = Position(tonumber(x), tonumber(y), tonumber(z))
-		local key = buildPositionKey(position)
-		if not seen[key] then
-			seen[key] = true
-			positions[#positions + 1] = position
-			if #positions > Farming.BUILD_MAX_TILES then
-				return nil, nil, string.format("You can queue at most %d tiles at once.", Farming.BUILD_MAX_TILES)
+		for token in raw:gmatch("[^;]+") do
+			local x, y, z = token:match("^(%-?%d+),(%-?%d+),(%-?%d+)$")
+			if not x then
+				return nil, "Invalid build position."
+			end
+
+			local position = Position(tonumber(x), tonumber(y), tonumber(z))
+			local key = buildPositionKey(position)
+			if not seen[key] then
+				seen[key] = true
+				entries[#entries + 1] = { position = position, orientation = orientation }
+				if #entries > Farming.BUILD_MAX_TILES then
+					return nil, string.format("You can queue at most %d tiles at once.", Farming.BUILD_MAX_TILES)
+				end
 			end
 		end
 	end
 
-	if #positions == 0 then
-		return nil, nil, "Select at least one tile to build."
+	if #entries == 0 then
+		return nil, "Select at least one tile to build."
 	end
 
-	return positions, orientation
+	return entries
 end
 
-local function validateBuildTile(player, position)
-	if not isWithinBuildRange(player, position) then
-		return false, "All construction tiles must be within 7 squares of your character."
-	end
-
-	local key = buildPositionKey(position)
-	if Farming.structurePositions[key] then
-		return false, "There is already a player structure on one of the selected tiles."
-	end
-
+local function validateWorldTile(position)
 	local tile = Tile(position)
 	if not tile or not tile:getGround() then
 		return false, "One of the selected tiles is not buildable."
@@ -137,12 +168,17 @@ local function validateBuildTile(player, position)
 	return true
 end
 
-local function cleanupBuiltItems(items)
-	for _, item in ipairs(items) do
-		if item then
-			item:remove()
-		end
+local function validateBuildTile(player, position)
+	if not isAdjacentBuildPosition(player, position) then
+		return false, "Structures can only be planned on one of the 8 squares next to your character."
 	end
+
+	local key = buildPositionKey(position)
+	if Farming.structurePositions[key] then
+		return false, "There is already a player structure reserved on one of the selected tiles."
+	end
+
+	return validateWorldTile(position)
 end
 
 local function spendMaterial(player, material, amount)
@@ -165,12 +201,135 @@ local function spendMaterial(player, material, amount)
 	return true
 end
 
+local function refundMaterial(playerGuid, material, amount)
+	if amount <= 0 then
+		return
+	end
+
+	db.query(string.format(
+		"INSERT INTO `player_materials` (`player_id`, `material`, `amount`) VALUES (%d, '%s', %d) " ..
+		"ON DUPLICATE KEY UPDATE `amount` = `amount` + VALUES(`amount`)",
+		playerGuid,
+		material,
+		amount
+	))
+end
+
 local function constructionEffect(x, y, z, effect)
 	Position(x, y, z):sendMagicEffect(effect)
 end
 
--- Keep the legacy catalogue packets for old clients and append an orientation-
--- aware packet consumed by the enhanced browser client.
+local function deletePersistedStructure(playerGuid, position)
+	db.query(string.format(
+		"DELETE FROM `player_structures` WHERE `player_id`=%d AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d",
+		playerGuid,
+		position.x,
+		position.y,
+		position.z
+	))
+end
+
+local function getBatchPlayer(batch)
+	local player = Player(batch.playerId)
+	if player and player:getGuid() == batch.playerGuid then
+		return player
+	end
+	return nil
+end
+
+local function finishBuildBatch(batchId)
+	local batch = Farming.buildBatches[batchId]
+	if not batch then
+		return
+	end
+
+	local player = getBatchPlayer(batch)
+	local chargedCost = batch.builtCount * batch.unitCost
+	if player then
+		local wallet = Farming.sendWallet(player)
+		player:sendExtendedOpcode(
+			Farming.OPCODE,
+			string.format(
+				"build|success|%s|%s|%d|%d|%d|%d",
+				batch.material,
+				batch.structureType,
+				batch.builtCount,
+				chargedCost,
+				wallet[batch.material] or 0,
+				batch.failedCount
+			)
+		)
+		player:sendTextMessage(
+			MESSAGE_EVENT_ADVANCE,
+			string.format(
+				"Built %d/%d %s structure%s for %d %s.",
+				batch.builtCount,
+				#batch.entries,
+				batch.structureType,
+				batch.builtCount == 1 and "" or "s",
+				chargedCost,
+				batch.material
+			)
+		)
+	end
+
+	Farming.buildBatches[batchId] = nil
+end
+
+local function completeBuildEntry(batchId, index)
+	local batch = Farming.buildBatches[batchId]
+	if not batch then
+		return
+	end
+
+	local entry = batch.entries[index]
+	if not entry or entry.done then
+		return
+	end
+	entry.done = true
+
+	local valid = validateWorldTile(entry.position)
+	local created = nil
+	if valid then
+		created = Game.createItem(entry.itemId, 1, entry.position)
+	end
+
+	local state = "built"
+	if created then
+		batch.builtCount = batch.builtCount + 1
+		entry.position:sendMagicEffect(CONST_ME_BLOCKHIT)
+	else
+		state = "failed"
+		batch.failedCount = batch.failedCount + 1
+		Farming.structurePositions[buildPositionKey(entry.position)] = nil
+		deletePersistedStructure(batch.playerGuid, entry.position)
+		refundMaterial(batch.playerGuid, batch.material, batch.unitCost)
+	end
+
+	local player = getBatchPlayer(batch)
+	if player then
+		player:sendExtendedOpcode(
+			Farming.OPCODE,
+			string.format(
+				"build|piece|%d|%d|%d|%d|%d|%d|%s",
+				batchId,
+				index,
+				entry.position.x,
+				entry.position.y,
+				entry.position.z,
+				entry.orientation,
+				state
+			)
+		)
+	end
+
+	batch.remaining = batch.remaining - 1
+	if batch.remaining <= 0 then
+		finishBuildBatch(batchId)
+	end
+end
+
+-- Keep legacy catalogue packets and append orientation-aware metadata.
 local baseSendBuildCatalog = Farming.sendBuildCatalog
 function Farming.sendBuildCatalog(player)
 	baseSendBuildCatalog(player)
@@ -190,9 +349,9 @@ function Farming.sendBuildCatalog(player)
 	end
 end
 
--- Replaces only the build confirmation slice. The persisted item_id is the
--- actually selected orientation, so the existing restore logic needs no schema
--- change and restores the same direction after server restart.
+-- Confirms an entire plan atomically, reserves its tiles and material balance,
+-- then reveals one real structure every two seconds. During the delay only the
+-- client-side ghost exists; construction dust is emitted before each reveal.
 function Farming.confirmBuild(player, material, structureType, rawPayload)
 	local materialCatalog = Farming.buildCatalog[material]
 	local config = materialCatalog and materialCatalog[structureType] or nil
@@ -201,53 +360,41 @@ function Farming.confirmBuild(player, material, structureType, rawPayload)
 		return true
 	end
 
-	local positions, orientation, parseError = parseBuildPayload(rawPayload)
-	if not positions then
+	local entries, parseError = parseBuildPayload(rawPayload)
+	if not entries then
 		buildError(player, parseError)
 		return true
 	end
 
-	if orientation == Farming.BUILD_ORIENTATION_VERTICAL and not config.rotatedItemId then
-		buildError(player, "This construction does not have a validated rotated variant.")
-		return true
-	end
-
-	for _, position in ipairs(positions) do
-		local valid, reason = validateBuildTile(player, position)
+	for _, entry in ipairs(entries) do
+		local valid, reason = validateBuildTile(player, entry.position)
 		if not valid then
 			buildError(player, reason)
 			return true
 		end
+
+		entry.itemId = resolveItemId(config, entry.orientation)
+		if not entry.itemId then
+			buildError(player, "This construction does not have a validated rotated variant.")
+			return true
+		end
 	end
 
-	local itemId = config.itemId
-	if orientation == Farming.BUILD_ORIENTATION_VERTICAL and config.rotatedItemId then
-		itemId = config.rotatedItemId
-	end
-
-	local totalCost = config.cost * #positions
+	local totalCost = config.cost * #entries
 	local wallet = Farming.getWallet(player)
 	if (wallet[material] or 0) < totalCost then
 		buildError(player, string.format("You need %d %s for this construction.", totalCost, material))
 		return true
 	end
 
-	local createdItems = {}
-	for _, position in ipairs(positions) do
-		local created = Game.createItem(itemId, 1, position)
-		if not created then
-			cleanupBuiltItems(createdItems)
-			buildError(player, "The server could not create one of the structures.")
-			return true
-		end
-		createdItems[#createdItems + 1] = created
-	end
-
+	-- Persist first as a reservation. Runtime items are intentionally created only
+	-- when their individual two-second construction step finishes.
 	local values = {}
-	for _, position in ipairs(positions) do
+	for _, entry in ipairs(entries) do
+		local position = entry.position
 		values[#values + 1] = string.format(
 			"(%d, '%s', '%s', %d, %d, %d, %d)",
-			player:getGuid(), material, structureType, itemId, position.x, position.y, position.z
+			player:getGuid(), material, structureType, entry.itemId, position.x, position.y, position.z
 		)
 	end
 
@@ -255,45 +402,51 @@ function Farming.confirmBuild(player, material, structureType, rawPayload)
 		"INSERT INTO `player_structures` (`player_id`, `material`, `structure_type`, `item_id`, `pos_x`, `pos_y`, `pos_z`) VALUES " .. table.concat(values, ",")
 	)
 	if not insertOk then
-		cleanupBuiltItems(createdItems)
 		buildError(player, "Those tiles could not be reserved for construction.")
 		return true
 	end
 
 	if not spendMaterial(player, material, totalCost) then
-		cleanupBuiltItems(createdItems)
-		local conditions = {}
-		for _, position in ipairs(positions) do
-			conditions[#conditions + 1] = string.format("(`pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d)", position.x, position.y, position.z)
+		for _, entry in ipairs(entries) do
+			deletePersistedStructure(player:getGuid(), entry.position)
 		end
-		db.query("DELETE FROM `player_structures` WHERE `player_id`=" .. player:getGuid() .. " AND (" .. table.concat(conditions, " OR ") .. ")")
 		buildError(player, "Your material balance changed before construction was confirmed.")
 		return true
 	end
 
-	for index, position in ipairs(positions) do
-		Farming.structurePositions[buildPositionKey(position)] = true
-		local delay = ((index - 1) * 75) + 1
-		addEvent(constructionEffect, delay, position.x, position.y, position.z, CONST_ME_POFF)
-		addEvent(constructionEffect, delay + 140, position.x, position.y, position.z, CONST_ME_BLOCKHIT)
+	for _, entry in ipairs(entries) do
+		Farming.structurePositions[buildPositionKey(entry.position)] = true
 	end
 
-	local newWallet = Farming.getWallet(player)
+	Farming.buildBatchSequence = Farming.buildBatchSequence + 1
+	local batchId = Farming.buildBatchSequence
+	Farming.buildBatches[batchId] = {
+		playerId = player:getId(),
+		playerGuid = player:getGuid(),
+		material = material,
+		structureType = structureType,
+		unitCost = config.cost,
+		entries = entries,
+		remaining = #entries,
+		builtCount = 0,
+		failedCount = 0,
+	}
+
 	player:sendExtendedOpcode(
 		Farming.OPCODE,
-		string.format(
-			"build|success|%s|%s|%d|%d|%d|%d",
-			material,
-			structureType,
-			#positions,
-			totalCost,
-			newWallet[material] or 0,
-			orientation
-		)
+		string.format("build|accepted|%d|%d|%d", batchId, #entries, totalCost)
 	)
-	player:sendTextMessage(
-		MESSAGE_EVENT_ADVANCE,
-		string.format("Built %d %s structure%s for %d %s.", #positions, structureType, #positions == 1 and "" or "s", totalCost, material)
-	)
+	player:sendTextMessage(MESSAGE_EVENT_ADVANCE, string.format("Construction started: %d structure%s queued.", #entries, #entries == 1 and "" or "s"))
+
+	for index, entry in ipairs(entries) do
+		local startDelay = (index - 1) * Farming.BUILD_STEP_MS
+		local position = entry.position
+		-- Dust while the client still shows the ghost. The real item appears only
+		-- at the end of this structure's two-second step.
+		addEvent(constructionEffect, startDelay + 1, position.x, position.y, position.z, CONST_ME_POFF)
+		addEvent(constructionEffect, startDelay + 900, position.x, position.y, position.z, CONST_ME_POFF)
+		addEvent(completeBuildEntry, startDelay + Farming.BUILD_STEP_MS, batchId, index)
+	end
+
 	return true
 end
