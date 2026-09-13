@@ -154,7 +154,7 @@ local function getStairDestination(stairPosition, orientation)
 	return Position(stairPosition.x, stairPosition.y - 1, stairPosition.z - 1)
 end
 
-local function getStairSupportPosition(stairPosition, orientation)
+local function getPreferredStairSupportPosition(stairPosition, orientation)
 	local destination = getStairDestination(stairPosition, orientation)
 	return Position(destination.x, destination.y, stairPosition.z)
 end
@@ -176,6 +176,31 @@ local function ownsStructureAt(playerGuid, structureType, position)
 	return true
 end
 
+-- A stair's sprite orientation determines the direction it climbs, but the wall
+-- supporting it does not have to be on that exact side. Prefer the natural
+-- support tile for the selected sprite and then accept any orthogonally adjacent
+-- player-built wall. This keeps placement intuitive around corners and wall runs.
+local function findStairSupportPosition(playerGuid, stairPosition, orientation)
+	local preferred = getPreferredStairSupportPosition(stairPosition, orientation)
+	if ownsStructureAt(playerGuid, "wall", preferred) then
+		return preferred
+	end
+
+	local candidates = {
+		Position(stairPosition.x, stairPosition.y - 1, stairPosition.z), -- north
+		Position(stairPosition.x - 1, stairPosition.y, stairPosition.z), -- west
+		Position(stairPosition.x + 1, stairPosition.y, stairPosition.z), -- east
+		Position(stairPosition.x, stairPosition.y + 1, stairPosition.z), -- south
+	}
+	for _, candidate in ipairs(candidates) do
+		if ownsStructureAt(playerGuid, "wall", candidate) then
+			return candidate
+		end
+	end
+
+	return nil
+end
+
 local function validateStairSupports(player, rawPayload)
 	local entries, parseError = parseBuildEntries(rawPayload)
 	if not entries then
@@ -186,9 +211,9 @@ local function validateStairSupports(player, rawPayload)
 		if entry.position.z <= 0 then
 			return false, "There is no upper floor available here."
 		end
-		local supportPosition = getStairSupportPosition(entry.position, entry.orientation)
-		if not ownsStructureAt(player:getGuid(), "wall", supportPosition) then
-			return false, "A wood stair must lean against one of your built walls."
+		local supportPosition = findStairSupportPosition(player:getGuid(), entry.position, entry.orientation)
+		if not supportPosition then
+			return false, "A wood stair must be directly next to one of your built walls."
 		end
 	end
 
@@ -320,7 +345,11 @@ local function collectConnectedWalls(walls, seed)
 end
 
 local function generatePlatformFromStair(playerGuid, stairPosition, orientation)
-	local supportPosition = getStairSupportPosition(stairPosition, orientation)
+	local supportPosition = findStairSupportPosition(playerGuid, stairPosition, orientation)
+	if not supportPosition then
+		return 0
+	end
+
 	local walls = loadOwnedWalls(playerGuid, stairPosition.z)
 	local connectedWalls = collectConnectedWalls(walls, supportPosition)
 	local createdCount = 0
