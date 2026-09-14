@@ -1,8 +1,6 @@
 -- Downward traversal for dynamically generated farming/building stairs.
--- Native stair items handle the ascent. The first time a player arrives on an
--- upper platform through one of those stairs, we learn the actual landing tile
--- used by the engine and remember the lower position they came from. Returning
--- to that landing from the same upper floor then sends the player back down.
+-- Native stair items handle ascent. We learn the exact upper landing used by
+-- the engine for each player and only that tile can trigger the return trip.
 
 local PLATFORM_FLOOR_ITEM_ID = 408
 local STAIR_SEARCH_RADIUS = 2
@@ -18,9 +16,7 @@ local function getPlatformOwner(position)
 	local query = db.storeQuery(string.format(
 		"SELECT `player_id` FROM `player_structures` WHERE `structure_type`='platform' " ..
 		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
-		position.x,
-		position.y,
-		position.z
+		position.x, position.y, position.z
 	))
 	if not query then
 		return nil
@@ -31,10 +27,6 @@ local function getPlatformOwner(position)
 end
 
 local function findNearbyPersistedStair(playerGuid, lowerZ, aroundPosition)
-	local minX = aroundPosition.x - STAIR_SEARCH_RADIUS
-	local maxX = aroundPosition.x + STAIR_SEARCH_RADIUS
-	local minY = aroundPosition.y - STAIR_SEARCH_RADIUS
-	local maxY = aroundPosition.y + STAIR_SEARCH_RADIUS
 	local query = db.storeQuery(string.format(
 		"SELECT `item_id`, `pos_x`, `pos_y`, `pos_z` FROM `player_structures` " ..
 		"WHERE `player_id`=%d AND `structure_type`='stair' AND `pos_z`=%d " ..
@@ -42,10 +34,10 @@ local function findNearbyPersistedStair(playerGuid, lowerZ, aroundPosition)
 		"ORDER BY (ABS(`pos_x`-%d) + ABS(`pos_y`-%d)) ASC LIMIT 1",
 		playerGuid,
 		lowerZ,
-		minX,
-		maxX,
-		minY,
-		maxY,
+		aroundPosition.x - STAIR_SEARCH_RADIUS,
+		aroundPosition.x + STAIR_SEARCH_RADIUS,
+		aroundPosition.y - STAIR_SEARCH_RADIUS,
+		aroundPosition.y + STAIR_SEARCH_RADIUS,
 		aroundPosition.x,
 		aroundPosition.y
 	))
@@ -72,12 +64,13 @@ local function canEnter(creature, position)
 	return tile:queryAdd(creature) == RETURNVALUE_NOERROR
 end
 
-local function findFallbackDescent(creature, upperPosition, stair)
-	-- Prefer the same x/y one floor below. If that is occupied by the supporting
-	-- wall, fall back to free cardinal squares around the stair base.
-	local projected = Position(upperPosition.x, upperPosition.y, upperPosition.z + 1)
-	if canEnter(creature, projected) then
-		return projected
+local function findSafeLowerDestination(creature, learnedDown, stair)
+	if learnedDown and canEnter(creature, learnedDown) then
+		return learnedDown
+	end
+
+	if not stair then
+		return nil
 	end
 
 	local x = stair.position.x
@@ -110,16 +103,16 @@ function stairDescent.onStepIn(creature, item, position, fromPosition)
 		return true
 	end
 
-	local key = positionKey(position)
+	local playerGuid = player:getGuid()
 
-	-- Learn the *actual* landing chosen by the native floorchange. This avoids
-	-- hard-coding assumptions about how each stair sprite offsets x/y while
-	-- climbing. The previous lower-floor square is always a valid return target.
+	-- Ascending: learn the exact landing tile chosen by the native floorchange.
+	-- Nothing else on the upper platform becomes a descent trigger.
 	if fromPosition.z == position.z + 1 then
 		local stair = findNearbyPersistedStair(ownerGuid, fromPosition.z, fromPosition)
 		if stair then
-			Farming.stairLandingCache[key] = {
-				playerGuid = ownerGuid,
+			Farming.stairLandingCache[playerGuid] = {
+				landingKey = positionKey(position),
+				ownerGuid = ownerGuid,
 				stair = stair,
 				down = Position(fromPosition.x, fromPosition.y, fromPosition.z),
 			}
@@ -127,29 +120,23 @@ function stairDescent.onStepIn(creature, item, position, fromPosition)
 		return true
 	end
 
-	-- Only descend when the player deliberately walks back onto the landing from
-	-- the same upper floor. This prevents an immediate up/down bounce on ascent.
+	-- Ordinary movement across the upper floor must never send the player down.
 	if fromPosition.z ~= position.z then
 		return true
 	end
 
-	local landing = Farming.stairLandingCache[key]
-	local destination = nil
-	if landing and landing.playerGuid == ownerGuid and canEnter(player, landing.down) then
-		destination = landing.down
-	else
-		-- Server restarts clear the learned cache. Recover gracefully by locating
-		-- the nearest persisted stair belonging to the same platform owner.
-		local stair = findNearbyPersistedStair(ownerGuid, position.z + 1, position)
-		if stair then
-			destination = findFallbackDescent(player, position, stair)
-		end
-	end
-
-	if not destination then
+	local learned = Farming.stairLandingCache[playerGuid]
+	if not learned or learned.ownerGuid ~= ownerGuid or learned.landingKey ~= positionKey(position) then
 		return true
 	end
 
+	local destination = findSafeLowerDestination(player, learned.down, learned.stair)
+	if not destination then
+		player:sendCancelMessage("The bottom of this stair is blocked.")
+		return true
+	end
+
+	Farming.stairLandingCache[playerGuid] = nil
 	player:teleportTo(destination, true)
 	return true
 end
