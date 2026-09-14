@@ -59,8 +59,20 @@ Module
           initFloorBuild()
         end, 550)
       end
+
+      local selectionGuardLoaded = pcall(dofile, 'farming_selection_guard')
+      if selectionGuardLoaded and initFarmingSelectionGuard then
+        -- Install last: it sees the final wrapped handlers and guarantees every
+        -- new construction selection first releases any previous mode.
+        originalScheduleEvent(function()
+          initFarmingSelectionGuard()
+        end, 650)
+      end
     end
   @onUnload: |
+    if terminateFarmingSelectionGuard then
+      terminateFarmingSelectionGuard()
+    end
     if terminateFloorBuild then
       terminateFloorBuild()
     end
