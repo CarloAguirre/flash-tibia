@@ -50,8 +50,20 @@ Module
           initCatapultV2()
         end, 450)
       end
+
+      local floorBuildLoaded = pcall(dofile, 'farming_floor_build')
+      if floorBuildLoaded and initFloorBuild then
+        -- Run after the catapult wrapper so floor mode becomes the outermost
+        -- shared Build/Cancel/map handler and can cleanly delegate when inactive.
+        originalScheduleEvent(function()
+          initFloorBuild()
+        end, 550)
+      end
     end
   @onUnload: |
+    if terminateFloorBuild then
+      terminateFloorBuild()
+    end
     if terminateCatapultV2 then
       terminateCatapultV2()
     end
