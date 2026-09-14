@@ -96,6 +96,16 @@ MiniWindow
         border-width: 1
         border-color: #5a5a5aff
 
+      UIItem
+        id: woodFloor
+        size: 30 30
+        virtual: true
+        anchors.left: woodCatapult.right
+        anchors.verticalCenter: parent.verticalCenter
+        margin-left: 4
+        border-width: 1
+        border-color: #5a5a5aff
+
     Label
       id: stoneLabel
       !text: tr('Stone')
