@@ -59,7 +59,10 @@ COPY src ./src
 COPY cmake ./cmake
 COPY tests ./tests
 COPY recompile.sh CMakeLists.txt CMakePresets.json vcpkg.json ./
+COPY docker/apply_farming_upper_combat.py ./apply_farming_upper_combat.py
 COPY --from=dependencies /opt/vcpkg_installed ./vcpkg_installed
+
+RUN python3 ./apply_farming_upper_combat.py
 
 RUN export VCPKG_ROOT=/opt/vcpkg/ \
     && cmake --preset linux-release \
