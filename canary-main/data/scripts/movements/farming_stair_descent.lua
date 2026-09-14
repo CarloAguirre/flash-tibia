@@ -1,6 +1,7 @@
 -- Downward traversal for dynamically generated farming/building stairs.
 -- Native stair items handle ascent. We learn the exact upper landing used by
--- the engine for each player and only that tile can trigger the return trip.
+-- the engine, then descend only when the player deliberately walks from that
+-- landing toward the square directly above the persisted stair base.
 
 local PLATFORM_FLOOR_ITEM_ID = 408
 local STAIR_SEARCH_RADIUS = 2
@@ -56,6 +57,62 @@ local function findNearbyPersistedStair(playerGuid, lowerZ, aroundPosition)
 	return stair
 end
 
+local function platformRowExists(playerGuid, position)
+	local query = db.storeQuery(string.format(
+		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`='platform' " ..
+		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
+		playerGuid, position.x, position.y, position.z
+	))
+	if not query then
+		return false
+	end
+	Result.free(query)
+	return true
+end
+
+local function ensureReturnTrigger(playerGuid, stair, upperZ)
+	local position = Position(stair.position.x, stair.position.y, upperZ)
+	local tile = Tile(position)
+	if not tile then
+		Game.createTile(position, true)
+		tile = Tile(position)
+	end
+	if not tile then
+		return nil
+	end
+
+	local ground = tile:getGround()
+	if ground then
+		if ground:getId() ~= PLATFORM_FLOOR_ITEM_ID then
+			return nil
+		end
+	elseif not Game.createItem(PLATFORM_FLOOR_ITEM_ID, 1, position) then
+		return nil
+	end
+
+	if not platformRowExists(playerGuid, position) then
+		local inserted = db.query(string.format(
+			"INSERT INTO `player_structures` (`player_id`,`material`,`structure_type`,`item_id`,`pos_x`,`pos_y`,`pos_z`) " ..
+			"VALUES (%d,'wood','platform',%d,%d,%d,%d)",
+			playerGuid,
+			PLATFORM_FLOOR_ITEM_ID,
+			position.x,
+			position.y,
+			position.z
+		))
+		if not inserted then
+			return nil
+		end
+	end
+
+	-- A platform tile is walkable support. It must not reserve the construction
+	-- slot even though it is persisted in player_structures.
+	if Farming.structurePositions then
+		Farming.structurePositions[positionKey(position)] = nil
+	end
+	return position
+end
+
 local function canEnter(creature, position)
 	local tile = Tile(position)
 	if not tile then
@@ -105,13 +162,17 @@ function stairDescent.onStepIn(creature, item, position, fromPosition)
 
 	local playerGuid = player:getGuid()
 
-	-- Ascending: learn the exact landing tile chosen by the native floorchange.
-	-- Nothing else on the upper platform becomes a descent trigger.
+	-- Ascending: learn the landing selected by the native floorchange and ensure
+	-- there is one walkable upper square directly above the lower stair. Walking
+	-- onto that square from the learned landing is the deliberate "walk down the
+	-- stairs" action; merely standing on the landing never descends.
 	if fromPosition.z == position.z + 1 then
 		local stair = findNearbyPersistedStair(ownerGuid, fromPosition.z, fromPosition)
 		if stair then
+			local returnTrigger = ensureReturnTrigger(ownerGuid, stair, position.z)
 			Farming.stairLandingCache[playerGuid] = {
 				landingKey = positionKey(position),
+				returnKey = returnTrigger and positionKey(returnTrigger) or nil,
 				ownerGuid = ownerGuid,
 				stair = stair,
 				down = Position(fromPosition.x, fromPosition.y, fromPosition.z),
@@ -120,13 +181,21 @@ function stairDescent.onStepIn(creature, item, position, fromPosition)
 		return true
 	end
 
-	-- Ordinary movement across the upper floor must never send the player down.
+	-- Same-floor movement only descends when it starts on the learned landing and
+	-- ends on the square directly above the stair base. All other upper-platform
+	-- walking remains completely ordinary.
 	if fromPosition.z ~= position.z then
 		return true
 	end
 
 	local learned = Farming.stairLandingCache[playerGuid]
-	if not learned or learned.ownerGuid ~= ownerGuid or learned.landingKey ~= positionKey(position) then
+	if not learned or learned.ownerGuid ~= ownerGuid then
+		return true
+	end
+	if positionKey(fromPosition) ~= learned.landingKey then
+		return true
+	end
+	if not learned.returnKey or positionKey(position) ~= learned.returnKey then
 		return true
 	end
 
