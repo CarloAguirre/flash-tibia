@@ -1,4 +1,4 @@
--- Fill the interior enclosed by player-built wall/window supports.
+-- Fill the interior enclosed by player-built wall/window/door supports.
 -- The existing siege support layer creates platform tiles above the perimeter;
 -- this extension treats that perimeter as a structural contour and fills the
 -- enclosed second-floor surface as well.
@@ -100,7 +100,7 @@ local function loadOwnedSupports(playerGuid, z)
 	local supports = {}
 	local query = db.storeQuery(string.format(
 		"SELECT `pos_x`, `pos_y`, `pos_z` FROM `player_structures` WHERE `player_id`=%d " ..
-		"AND `structure_type` IN ('wall','window') AND `pos_z`=%d",
+		"AND `structure_type` IN ('wall','window','door') AND `pos_z`=%d",
 		playerGuid,
 		z
 	))
@@ -123,7 +123,7 @@ end
 local function ownsSupportAt(playerGuid, position)
 	local query = db.storeQuery(string.format(
 		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d " ..
-		"AND `structure_type` IN ('wall','window') " ..
+		"AND `structure_type` IN ('wall','window','door') " ..
 		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
 		playerGuid,
 		position.x,
@@ -221,10 +221,14 @@ local function enclosedInterior(connected)
 	local queue = { { x = outerMinX, y = outerMinY } }
 	outside[planarKey(outerMinX, outerMinY)] = true
 	local cursor = 1
+
+	-- Use cardinal connectivity only. With an 8-neighbour flood fill the exterior
+	-- can leak diagonally through one-tile wall corners and incorrectly classify a
+	-- perfectly enclosed room as open.
 	local directions = {
-		{ -1, -1 }, { 0, -1 }, { 1, -1 },
-		{ -1, 0 },               { 1, 0 },
-		{ -1, 1 },  { 0, 1 },  { 1, 1 },
+		{ 0, -1 },
+		{ -1, 0 }, { 1, 0 },
+		{ 0, 1 },
 	}
 
 	while cursor <= #queue do
