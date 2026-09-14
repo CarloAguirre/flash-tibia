@@ -114,8 +114,8 @@ end
 
 local function isNeededByStair(playerGuid, lowerPosition)
 	local query = db.storeQuery(string.format(
-		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`='stair' " ..
-		"AND `pos_z`=%d AND ((ABS(`pos_x`-%d)=1 AND `pos_y`=%d) OR (`pos_x`=%d AND ABS(`pos_y`-%d)=1)) LIMIT 1",
+		"SELECT `item_id`, `pos_x`, `pos_y` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`='stair' " ..
+		"AND `pos_z`=%d AND ((ABS(`pos_x`-%d)=1 AND `pos_y`=%d) OR (`pos_x`=%d AND ABS(`pos_y`-%d)=1))",
 		playerGuid,
 		lowerPosition.z,
 		lowerPosition.x,
@@ -126,13 +126,31 @@ local function isNeededByStair(playerGuid, lowerPosition)
 	if not query then
 		return false
 	end
+
+	local needed = false
+	repeat
+		local itemId = Result.getNumber(query, "item_id")
+		local stairX = Result.getNumber(query, "pos_x")
+		local stairY = Result.getNumber(query, "pos_y")
+		local landingX = stairX
+		local landingY = stairY - 1
+		if itemId == STAIR_WEST_ITEM_ID then
+			landingX = stairX - 1
+			landingY = stairY
+		end
+		if lowerPosition.x == landingX and lowerPosition.y == landingY then
+			needed = true
+			break
+		end
+	until not Result.next(query)
 	Result.free(query)
-	return true
+	return needed
 end
 
 local function removePerimeterPlatformTile(playerGuid, lowerPosition, platformZ)
-	-- Keep the minimal landing support needed by any stair on this contour and
-	-- never pull the ground out from beneath a structure already built upstairs.
+	-- Keep only the actual upper landing tile required by the stair orientation;
+	-- never preserve unrelated adjacent perimeter tiles or pull the ground out
+	-- from beneath a structure already built upstairs.
 	if isNeededByStair(playerGuid, lowerPosition) then
 		return false
 	end
