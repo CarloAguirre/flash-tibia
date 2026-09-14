@@ -1,7 +1,7 @@
 -- Fill the interior enclosed by player-built wall/window/door supports.
--- The existing siege support layer creates platform tiles above the perimeter;
--- this extension treats that perimeter as a structural contour and fills the
--- enclosed second-floor surface as well.
+-- Closed constructions use only the enclosed footprint as their upper floor;
+-- perimeter support tiles are trimmed so the generated floor does not become
+-- a balcony around the lower-storey walls.
 
 if not Farming then
 	return
@@ -92,6 +92,81 @@ local function persistPlatformTile(playerGuid, position)
 		return false
 	end
 
+	Farming.structurePositions[positionKey(position)] = nil
+	return true
+end
+
+local function hasStructureAbovePlatform(playerGuid, position)
+	local query = db.storeQuery(string.format(
+		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`<>'platform' " ..
+		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
+		playerGuid,
+		position.x,
+		position.y,
+		position.z
+	))
+	if not query then
+		return false
+	end
+	Result.free(query)
+	return true
+end
+
+local function isNeededByStair(playerGuid, lowerPosition)
+	local query = db.storeQuery(string.format(
+		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`='stair' " ..
+		"AND `pos_z`=%d AND ((ABS(`pos_x`-%d)=1 AND `pos_y`=%d) OR (`pos_x`=%d AND ABS(`pos_y`-%d)=1)) LIMIT 1",
+		playerGuid,
+		lowerPosition.z,
+		lowerPosition.x,
+		lowerPosition.y,
+		lowerPosition.x,
+		lowerPosition.y
+	))
+	if not query then
+		return false
+	end
+	Result.free(query)
+	return true
+end
+
+local function removePerimeterPlatformTile(playerGuid, lowerPosition, platformZ)
+	-- Keep the minimal landing support needed by any stair on this contour and
+	-- never pull the ground out from beneath a structure already built upstairs.
+	if isNeededByStair(playerGuid, lowerPosition) then
+		return false
+	end
+
+	local position = Position(lowerPosition.x, lowerPosition.y, platformZ)
+	if hasStructureAbovePlatform(playerGuid, position) then
+		return false
+	end
+
+	local query = db.storeQuery(string.format(
+		"SELECT `id` FROM `player_structures` WHERE `player_id`=%d AND `structure_type`='platform' " ..
+		"AND `pos_x`=%d AND `pos_y`=%d AND `pos_z`=%d LIMIT 1",
+		playerGuid,
+		position.x,
+		position.y,
+		position.z
+	))
+	if not query then
+		return false
+	end
+	local rowId = Result.getNumber(query, "id")
+	Result.free(query)
+
+	local tile = Tile(position)
+	local ground = tile and tile:getGround() or nil
+	if ground and ground:getId() == PLATFORM_FLOOR_ITEM_ID then
+		ground:remove()
+	end
+
+	db.query(string.format(
+		"DELETE FROM `player_structures` WHERE `id`=%d AND `player_id`=%d",
+		rowId,
+		playerGuid
+	))
 	Farming.structurePositions[positionKey(position)] = nil
 	return true
 end
@@ -271,18 +346,37 @@ local function fillEnclosedPlatform(playerGuid, stairPosition, orientation)
 		return 0
 	end
 
+	local interior = enclosedInterior(connected)
 	local created = 0
 	local platformZ = stairPosition.z - 1
-	for _, supportPosition in ipairs(connected) do
-		if persistPlatformTile(playerGuid, Position(supportPosition.x, supportPosition.y, platformZ)) then
-			created = created + 1
+
+	-- Preserve the legacy wall-top walkway behavior for open wall runs. Once the
+	-- contour is actually enclosed, however, the upper storey must match the
+	-- downstairs room footprint instead of copying the wall perimeter as a ring.
+	if #interior == 0 then
+		for _, supportPosition in ipairs(connected) do
+			if persistPlatformTile(playerGuid, Position(supportPosition.x, supportPosition.y, platformZ)) then
+				created = created + 1
+			end
 		end
+		return created
 	end
-	for _, cell in ipairs(enclosedInterior(connected)) do
+
+	for _, cell in ipairs(interior) do
 		if persistPlatformTile(playerGuid, Position(cell.x, cell.y, platformZ)) then
 			created = created + 1
 		end
 	end
+
+	-- farming_siege_supports runs before this extension and may already have
+	-- materialized a platform on every wall/window tile. Remove those perimeter
+	-- rows for enclosed rooms so existing and newly-built floors have the same
+	-- footprint as the lower interior. Stair landings and occupied upper tiles
+	-- are deliberately retained for safety.
+	for _, supportPosition in ipairs(connected) do
+		removePerimeterPlatformTile(playerGuid, supportPosition, platformZ)
+	end
+
 	return created
 end
 
