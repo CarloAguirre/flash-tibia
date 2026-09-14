@@ -43,8 +43,18 @@ Module
           end
         end
       end, 350)
+
+      local catapultV2Loaded = pcall(dofile, 'farming_catapult_v2')
+      if catapultV2Loaded and initCatapultV2 then
+        originalScheduleEvent(function()
+          initCatapultV2()
+        end, 450)
+      end
     end
   @onUnload: |
+    if terminateCatapultV2 then
+      terminateCatapultV2()
+    end
     if terminateSiege then
       terminateSiege()
     end
