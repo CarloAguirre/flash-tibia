@@ -286,6 +286,54 @@ local function collectConnectedSupports(supports, seed)
 	return connected
 end
 
+local function hasBoundary(supportSet, x, y, dx, dy, minX, maxX, minY, maxY)
+	local cx = x + dx
+	local cy = y + dy
+	while cx >= minX and cx <= maxX and cy >= minY and cy <= maxY do
+		if supportSet[planarKey(cx, cy)] then
+			return true
+		end
+		cx = cx + dx
+		cy = cy + dy
+	end
+	return false
+end
+
+local function inferInteriorFromOpposingSupports(supportSet, minX, maxX, minY, maxY)
+	local inferred = {}
+	local seen = {}
+
+	for x = minX, maxX do
+		for y = minY, maxY do
+			local key = planarKey(x, y)
+			if not supportSet[key] then
+				local horizontal = false
+				local vertical = false
+
+				-- Allow one tile of vertical/horizontal tolerance so corner pieces and
+				-- short wall runs do not have to share the exact same vertex tile.
+				for offset = -1, 1 do
+					if not horizontal then
+						horizontal = hasBoundary(supportSet, x, y + offset, -1, 0, minX, maxX, minY, maxY)
+							and hasBoundary(supportSet, x, y + offset, 1, 0, minX, maxX, minY, maxY)
+					end
+					if not vertical then
+						vertical = hasBoundary(supportSet, x + offset, y, 0, -1, minX, maxX, minY, maxY)
+							and hasBoundary(supportSet, x + offset, y, 0, 1, minX, maxX, minY, maxY)
+					end
+				end
+
+				if horizontal and vertical and not seen[key] then
+					seen[key] = true
+					inferred[#inferred + 1] = { x = x, y = y }
+				end
+			end
+		end
+	end
+
+	return inferred
+end
+
 local function enclosedInterior(connected)
 	if #connected < 4 then
 		return {}
@@ -314,10 +362,6 @@ local function enclosedInterior(connected)
 	local queue = { { x = outerMinX, y = outerMinY } }
 	outside[planarKey(outerMinX, outerMinY)] = true
 	local cursor = 1
-
-	-- Use cardinal connectivity only. With an 8-neighbour flood fill the exterior
-	-- can leak diagonally through one-tile wall corners and incorrectly classify a
-	-- perfectly enclosed room as open.
 	local directions = {
 		{ 0, -1 },
 		{ -1, 0 }, { 1, 0 },
@@ -341,14 +385,28 @@ local function enclosedInterior(connected)
 	end
 
 	local interior = {}
+	local interiorSet = {}
 	for x = minX, maxX do
 		for y = minY, maxY do
 			local key = planarKey(x, y)
 			if not supportSet[key] and not outside[key] then
+				interiorSet[key] = true
 				interior[#interior + 1] = { x = x, y = y }
 			end
 		end
 	end
+
+	-- A player-built room can be visually closed even when wall runs meet with a
+	-- one-tile/staggered corner gap. Merge cells bounded by supports on all four
+	-- sides so those near-closed contours still produce one continuous floor.
+	for _, cell in ipairs(inferInteriorFromOpposingSupports(supportSet, minX, maxX, minY, maxY)) do
+		local key = planarKey(cell.x, cell.y)
+		if not interiorSet[key] then
+			interiorSet[key] = true
+			interior[#interior + 1] = cell
+		end
+	end
+
 	return interior
 end
 
@@ -368,9 +426,6 @@ local function fillEnclosedPlatform(playerGuid, stairPosition, orientation)
 	local created = 0
 	local platformZ = stairPosition.z - 1
 
-	-- Preserve the legacy wall-top walkway behavior for open wall runs. Once the
-	-- contour is actually enclosed, however, the upper storey must match the
-	-- downstairs room footprint instead of copying the wall perimeter as a ring.
 	if #interior == 0 then
 		for _, supportPosition in ipairs(connected) do
 			if persistPlatformTile(playerGuid, Position(supportPosition.x, supportPosition.y, platformZ)) then
@@ -386,11 +441,6 @@ local function fillEnclosedPlatform(playerGuid, stairPosition, orientation)
 		end
 	end
 
-	-- farming_siege_supports runs before this extension and may already have
-	-- materialized a platform on every wall/window tile. Remove those perimeter
-	-- rows for enclosed rooms so existing and newly-built floors have the same
-	-- footprint as the lower interior. Stair landings and occupied upper tiles
-	-- are deliberately retained for safety.
 	for _, supportPosition in ipairs(connected) do
 		removePerimeterPlatformTile(playerGuid, supportPosition, platformZ)
 	end
