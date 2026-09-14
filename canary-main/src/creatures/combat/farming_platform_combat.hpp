@@ -5,7 +5,7 @@
 #include "items/tile.hpp"
 
 namespace FarmingPlatformCombat {
-	inline constexpr std::string_view PLATFORM_ATTRIBUTE = "farmingUpperFloor";
+	inline constexpr const char* PLATFORM_ATTRIBUTE = "farmingUpperFloor";
 
 	inline bool isStandingOnUpperPlatform(const std::shared_ptr<Creature> &attacker) {
 		if (!attacker || !attacker->getPlayer()) {
@@ -18,7 +18,7 @@ namespace FarmingPlatformCombat {
 		}
 
 		const auto &ground = tile->getGround();
-		return ground && ground->getCustomAttribute(std::string(PLATFORM_ATTRIBUTE)) != nullptr;
+		return ground && ground->getCustomAttribute(PLATFORM_ATTRIBUTE) != nullptr;
 	}
 
 	inline bool canAttackLowerFloor(const std::shared_ptr<Creature> &attacker, const Position &targetPosition) {
