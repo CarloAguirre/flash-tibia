@@ -1,4 +1,4 @@
-local farmingResources = TalkAction("/resources", "/farmingresources")
+local farmingResources = TalkAction("/resources")
 
 local VALID_MATERIALS = {
 	wood = true,
