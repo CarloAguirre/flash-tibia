@@ -100,6 +100,7 @@ MiniWindow
         id: woodFloor
         size: 30 30
         virtual: true
+        item-id: 408
         anchors.left: woodCatapult.right
         anchors.verticalCenter: parent.verticalCenter
         margin-left: 4
