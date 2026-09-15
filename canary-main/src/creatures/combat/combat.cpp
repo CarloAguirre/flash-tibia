@@ -299,9 +299,19 @@ ReturnValue Combat::canDoCombat(const std::shared_ptr<Creature> &caster, const s
 		const auto &casterPlayer = caster->getPlayer();
 		const auto casterTile = caster->getTile();
 		const auto casterGround = casterTile ? casterTile->getGround() : nullptr;
+		bool standingOnFarmingFloor = casterGround && casterGround->getID() == 408;
+		if (!standingOnFarmingFloor && casterTile) {
+			if (const auto itemList = casterTile->getItemList()) {
+				for (const auto &item : *itemList) {
+					if (item && item->getID() == 408) {
+						standingOnFarmingFloor = true;
+						break;
+					}
+				}
+			}
+		}
 		const bool canAttackDownFromFarmingFloor = casterPlayer
-			&& casterGround
-			&& casterGround->getID() == 408
+			&& standingOnFarmingFloor
 			&& tilePosition.z == casterPosition.z + 1;
 
 		if (casterPosition.z < tilePosition.z && !canAttackDownFromFarmingFloor) {

@@ -137,9 +137,19 @@ int32_t Weapon::playerWeaponCheck(const std::shared_ptr<Player> &player, const s
 	const Position &targetPos = target->getPosition();
 	const auto playerTile = player->getTile();
 	const auto playerGround = playerTile ? playerTile->getGround() : nullptr;
+	bool standingOnFarmingFloor = playerGround && playerGround->getID() == 408;
+	if (!standingOnFarmingFloor && playerTile) {
+		if (const auto itemList = playerTile->getItemList()) {
+			for (const auto &floorItem : *itemList) {
+				if (floorItem && floorItem->getID() == 408) {
+					standingOnFarmingFloor = true;
+					break;
+				}
+			}
+		}
+	}
 	const bool canShootDownFromFarmingFloor = shootRange > 1
-		&& playerGround
-		&& playerGround->getID() == 408
+		&& standingOnFarmingFloor
 		&& targetPos.z == playerPos.z + 1;
 
 	if (playerPos.z != targetPos.z && !canShootDownFromFarmingFloor) {
