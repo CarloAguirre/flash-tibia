@@ -30,8 +30,23 @@ replace_once(
     '''\tonAttacked();\n\tattackedCreature->onAttacked();\n\n\tconst bool farmingUpperFloorAttack = FarmingPlatformCombat::canAttackLowerFloor(getCreature(), attackedCreature->getPosition());\n\tif (g_game().isSightClear(getPosition(), attackedCreature->getPosition(), !farmingUpperFloorAttack)) {\n\t\tdoAttacking(interval);\n\t}\n''',
 )
 
-# Weapon range validation has a second same-floor gate. Keep melee/fist behavior
-# unchanged and allow only weapons with a real ranged shoot distance (> 1).
+# Combat::canDoCombat(tile) is the source of the "First go downstairs" rejection.
+# Bypass only that z-level gate for an attacker standing on a marked farming
+# platform and targeting the immediately lower floor; all other combat rules stay.
+replace_once(
+    "src/creatures/combat/combat.cpp",
+    '#include "creatures/combat/combat.hpp"\n\n#include "config/configmanager.hpp"',
+    '#include "creatures/combat/combat.hpp"\n#include "creatures/combat/farming_platform_combat.hpp"\n\n#include "config/configmanager.hpp"',
+)
+
+replace_once(
+    "src/creatures/combat/combat.cpp",
+    '''\tif (caster) {\n\t\tconst Position &casterPosition = caster->getPosition();\n\t\tconst Position &tilePosition = tile->getPosition();\n\t\tif (casterPosition.z < tilePosition.z) {\n\t\t\treturn RETURNVALUE_FIRSTGODOWNSTAIRS;\n\t\t} else if (casterPosition.z > tilePosition.z) {\n\t\t\treturn RETURNVALUE_FIRSTGOUPSTAIRS;\n\t\t}\n''',
+    '''\tif (caster) {\n\t\tconst Position &casterPosition = caster->getPosition();\n\t\tconst Position &tilePosition = tile->getPosition();\n\t\tif (!FarmingPlatformCombat::canAttackLowerFloor(caster, tilePosition)) {\n\t\t\tif (casterPosition.z < tilePosition.z) {\n\t\t\t\treturn RETURNVALUE_FIRSTGODOWNSTAIRS;\n\t\t\t} else if (casterPosition.z > tilePosition.z) {\n\t\t\t\treturn RETURNVALUE_FIRSTGOUPSTAIRS;\n\t\t\t}\n\t\t}\n''',
+)
+
+# Weapon validation has its own same-floor gate. Permit the same one-floor-down
+# exception here too, for both melee and ranged attacks.
 replace_once(
     "src/items/weapons/weapons.cpp",
     '#include "creatures/combat/combat.hpp"\n#include "game/game.hpp"',
@@ -41,7 +56,7 @@ replace_once(
 replace_once(
     "src/items/weapons/weapons.cpp",
     '''\tconst Position &playerPos = player->getPosition();\n\tconst Position &targetPos = target->getPosition();\n\tif (playerPos.z != targetPos.z) {\n\t\treturn 0;\n\t}\n''',
-    '''\tconst Position &playerPos = player->getPosition();\n\tconst Position &targetPos = target->getPosition();\n\tconst bool farmingUpperFloorShot = shootRange > 1 && FarmingPlatformCombat::canAttackLowerFloor(player, targetPos);\n\tif (playerPos.z != targetPos.z && !farmingUpperFloorShot) {\n\t\treturn 0;\n\t}\n''',
+    '''\tconst Position &playerPos = player->getPosition();\n\tconst Position &targetPos = target->getPosition();\n\tif (playerPos.z != targetPos.z && !FarmingPlatformCombat::canAttackLowerFloor(player, targetPos)) {\n\t\treturn 0;\n\t}\n''',
 )
 
 print("Applied farming upper-floor combat patch.")
