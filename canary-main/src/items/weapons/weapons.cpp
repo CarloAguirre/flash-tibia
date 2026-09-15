@@ -135,7 +135,14 @@ void Weapon::configureWeapon(const ItemType &it) {
 int32_t Weapon::playerWeaponCheck(const std::shared_ptr<Player> &player, const std::shared_ptr<Creature> &target, uint8_t shootRange) const {
 	const Position &playerPos = player->getPosition();
 	const Position &targetPos = target->getPosition();
-	if (playerPos.z != targetPos.z) {
+	const auto playerTile = player->getTile();
+	const auto playerGround = playerTile ? playerTile->getGround() : nullptr;
+	const bool canShootDownFromFarmingFloor = shootRange > 1
+		&& playerGround
+		&& playerGround->getID() == 408
+		&& targetPos.z == playerPos.z + 1;
+
+	if (playerPos.z != targetPos.z && !canShootDownFromFarmingFloor) {
 		return 0;
 	}
 

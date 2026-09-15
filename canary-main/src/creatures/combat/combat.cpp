@@ -296,7 +296,15 @@ ReturnValue Combat::canDoCombat(const std::shared_ptr<Creature> &caster, const s
 	if (caster) {
 		const Position &casterPosition = caster->getPosition();
 		const Position &tilePosition = tile->getPosition();
-		if (casterPosition.z < tilePosition.z) {
+		const auto &casterPlayer = caster->getPlayer();
+		const auto casterTile = caster->getTile();
+		const auto casterGround = casterTile ? casterTile->getGround() : nullptr;
+		const bool canAttackDownFromFarmingFloor = casterPlayer
+			&& casterGround
+			&& casterGround->getID() == 408
+			&& tilePosition.z == casterPosition.z + 1;
+
+		if (casterPosition.z < tilePosition.z && !canAttackDownFromFarmingFloor) {
 			return RETURNVALUE_FIRSTGODOWNSTAIRS;
 		} else if (casterPosition.z > tilePosition.z) {
 			return RETURNVALUE_FIRSTGOUPSTAIRS;
