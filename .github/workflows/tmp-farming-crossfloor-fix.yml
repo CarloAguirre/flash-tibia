@@ -1,0 +1,86 @@
+name: Temporary farming cross-floor combat fix
+
+on:
+  push:
+    branches:
+      - feature/farming-system
+    paths:
+      - .github/workflows/tmp-farming-crossfloor-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/farming-system
+          fetch-depth: 0
+      - name: Patch Canary farming cross-floor combat
+        shell: python
+        run: |
+          from pathlib import Path
+
+          combat = Path('canary-main/src/creatures/combat/combat.cpp')
+          text = combat.read_text()
+          old = '''\t\tconst Position &casterPosition = caster->getPosition();
+\t\tconst Position &tilePosition = tile->getPosition();
+\t\tif (casterPosition.z < tilePosition.z) {
+\t\t\treturn RETURNVALUE_FIRSTGODOWNSTAIRS;
+\t\t} else if (casterPosition.z > tilePosition.z) {
+\t\t\treturn RETURNVALUE_FIRSTGOUPSTAIRS;
+\t\t}
+'''
+          new = '''\t\tconst Position &casterPosition = caster->getPosition();
+\t\tconst Position &tilePosition = tile->getPosition();
+\t\tconst auto &casterPlayer = caster->getPlayer();
+\t\tconst auto casterTile = caster->getTile();
+\t\tconst auto casterGround = casterTile ? casterTile->getGround() : nullptr;
+\t\tconst bool canAttackDownFromFarmingFloor = casterPlayer
+\t\t\t&& casterGround
+\t\t\t&& casterGround->getID() == 408
+\t\t\t&& tilePosition.z == casterPosition.z + 1;
+
+\t\tif (casterPosition.z < tilePosition.z && !canAttackDownFromFarmingFloor) {
+\t\t\treturn RETURNVALUE_FIRSTGODOWNSTAIRS;
+\t\t} else if (casterPosition.z > tilePosition.z) {
+\t\t\treturn RETURNVALUE_FIRSTGOUPSTAIRS;
+\t\t}
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'combat.cpp expected exactly one floor guard, found {text.count(old)}')
+          combat.write_text(text.replace(old, new, 1))
+
+          weapons = Path('canary-main/src/items/weapons/weapons.cpp')
+          text = weapons.read_text()
+          old = '''\tconst Position &playerPos = player->getPosition();
+\tconst Position &targetPos = target->getPosition();
+\tif (playerPos.z != targetPos.z) {
+\t\treturn 0;
+\t}
+'''
+          new = '''\tconst Position &playerPos = player->getPosition();
+\tconst Position &targetPos = target->getPosition();
+\tconst auto playerTile = player->getTile();
+\tconst auto playerGround = playerTile ? playerTile->getGround() : nullptr;
+\tconst bool canShootDownFromFarmingFloor = shootRange > 1
+\t\t&& playerGround
+\t\t&& playerGround->getID() == 408
+\t\t&& targetPos.z == playerPos.z + 1;
+
+\tif (playerPos.z != targetPos.z && !canShootDownFromFarmingFloor) {
+\t\treturn 0;
+\t}
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'weapons.cpp expected exactly one floor guard, found {text.count(old)}')
+          weapons.write_text(text.replace(old, new, 1))
+      - name: Commit source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add canary-main/src/creatures/combat/combat.cpp canary-main/src/items/weapons/weapons.cpp
+          git commit -m "fix(farming): allow ranged attacks from upper floors"
+          git push origin HEAD:feature/farming-system
